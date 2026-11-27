@@ -109,6 +109,17 @@ class SQLiteTests(MemoryContract, unittest.TestCase):
         run("complete", publication, "0", "https://example.invalid/product")
         self.assertEqual(run("report")["expenses_cents"], 0)
 
+    def test_incomplete_draft_cannot_be_published(self):
+        identifier = director.plan(self.memory, "onboarding", 1200, 400, 0, None)
+        row = self.memory.propose("claude", {"dossier_id": identifier}, 208)
+        self.approve(row)
+        self.memory.claim(row["id"], {"claude"})
+        self.memory.record_draft(row["id"], {"draft": "Partial", "stop_reason": "max_tokens"})
+        self.memory.finish(row["id"], 1, "test-receipt")
+        args = cli.parser().parse_args(["propose-publish", identifier, "--draft-id", row["id"]])
+        with self.assertRaises(Refused):
+            cli.proposal(args, self.memory)
+
     def test_telegram_filters_and_persists_offset(self):
         row = self.memory.propose("publish", {}, 0)
         telegram = Mock(operator=42)
@@ -198,9 +209,19 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(check.call_count, 2)
         self.assertEqual(http.request.call_args.args[2]["max_tokens"], 1600)
 
+    def test_new_limit_is_explicit_and_legacy_is_unchanged(self):
+        for limit in (1600, 8000):
+            http = Mock()
+            http.request.side_effect = [{"input_tokens": 50}, {"model": "x", "usage": {},
+                "stop_reason": "max_tokens", "content": [{"type": "text", "text": "Partial"}]}]
+            payload = {"model": "x", "prompt": "x", "max_tokens": limit}
+            result = Claude(http, "test-key").generate(payload, Mock())
+            self.assertEqual(http.request.call_args.args[2]["max_tokens"], limit)
+            self.assertEqual(result["stop_reason"], "max_tokens")
+
     def test_spend_floor_and_rounded_reservation(self):
         model = "claude-haiku-4-5-20251001"
-        self.assertEqual(finance.claude_commitment(model, 200, 1000), 202)
+        self.assertEqual(finance.claude_commitment(model, 200, 1000), 208)
         with self.assertRaises(Refused):
             finance.claude_commitment(model, 100, 1000)
 

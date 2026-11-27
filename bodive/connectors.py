@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .memory import Refused
+from .finance import LEGACY_OUTPUT_LIMIT, OUTPUT_BILLING_BOUND
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -92,7 +93,7 @@ class Telegram:
 
 class Claude:
     INPUT_LIMIT = 4_000
-    OUTPUT_LIMIT = 1_600
+    OUTPUT_LIMIT = OUTPUT_BILLING_BOUND
 
     def __init__(self, http, key):
         self.http = http
@@ -103,16 +104,19 @@ class Claude:
                                  body, self.headers)
 
     def generate(self, payload, check_running):
+        limit = payload.get("max_tokens", LEGACY_OUTPUT_LIMIT)
+        if type(limit) is not int or not 1 <= limit <= self.OUTPUT_LIMIT:
+            raise Refused("Invalid approved output limit")
         body = {"model": payload["model"], "messages": [{"role": "user", "content": payload["prompt"]}]}
         check_running()
         count = self.call("/count_tokens", body).get("input_tokens")
         if type(count) is not int or not 0 < count <= self.INPUT_LIMIT:
             raise Refused("Claude input exceeds limit or could not be verified")
         check_running()
-        result = self.call("", {**body, "max_tokens": self.OUTPUT_LIMIT})
+        result = self.call("", {**body, "max_tokens": limit})
         try:
             draft = "\n".join(block["text"] for block in result["content"] if block["type"] == "text")
-            if not draft.strip() or len(draft) > 20_000:
+            if not draft.strip() or len(draft) > 100_000:
                 raise ValueError
             return {"draft": draft, "usage": result["usage"], "model": result["model"],
                     "stop_reason": result["stop_reason"]}

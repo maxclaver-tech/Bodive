@@ -34,7 +34,12 @@ def on_message(memory, telegram, message):
         telegram.send("BODIVE stopped. Pending and approved operations were cancelled.")
         return
     if text == "/budget":
-        telegram.send(canonical(memory.report()))
+        report = memory.report()
+        labels = (("Presupuesto inicial", "budget_cents"), ("Ingresos", "income_cents"),
+                  ("Gastos", "expenses_cents"), ("Beneficio", "profit_cents"),
+                  ("Comprometido", "committed_cents"), ("Disponible", "available_cents"))
+        telegram.send("BODIVE · Presupuesto\n" + "\n".join(
+            f"{label}: {report[key] / 100:.2f} EUR" for label, key in labels))
         return
     if match := re.fullmatch(rf"/dossier ({ID})", text):
         telegram.send(json.dumps(memory.load(match[1]), ensure_ascii=False, indent=2))
@@ -58,8 +63,17 @@ def on_message(memory, telegram, message):
             value = row["payload" if action == "review" else "result"]
             if value is None:
                 raise Refused("No result has been recorded")
-            telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
-                          + json.dumps(json.loads(value), ensure_ascii=False, indent=2))
+            data = json.loads(value)
+            if action == "result" and row["kind"] == "claude" and "draft" in data:
+                status = "Completo" if data.get("stop_reason") == "end_turn" else "INCOMPLETO: no publicar"
+                telegram.send(f"BODIVE · Borrador {identifier}\n{status}\n"
+                              + data["draft"])
+                telegram.send("Datos de generación\n" + json.dumps(
+                    {key: val for key, val in data.items() if key != "draft"},
+                    ensure_ascii=False, indent=2))
+            else:
+                telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
+                              + json.dumps(data, ensure_ascii=False, indent=2))
         return
     telegram.send("Commands: /dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
