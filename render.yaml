@@ -1,0 +1,32 @@
+services:
+  - type: worker
+    name: bodive-worker
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: BODIVE_MODE
+        value: live
+      - key: BODIVE_LIVE_ENABLED
+        value: "yes"
+      - key: BODIVE_WORKER_ENABLED
+        sync: false
+      - key: SUPABASE_DATABASE_URL
+        sync: false
+      - key: PGSSLROOTCERT
+        value: /etc/secrets/supabase-ca.crt
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_OPERATOR_ID
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        sync: false
+      - key: CLAUDE_INPUT_CENTS_PER_MILLION
+        sync: false
+      - key: CLAUDE_OUTPUT_CENTS_PER_MILLION
+        sync: false
