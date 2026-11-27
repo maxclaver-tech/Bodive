@@ -38,3 +38,7 @@ Cuando los seis capítulos estén completos y conciliados, envía /assemble DOSI
 ## Control desde Telegram (fase de botones)
 
 Usa /notify ID para recuperar los botones de una solicitud existente. /plan TEMA crea un dosier, /chapter DOSIER N prepara un capítulo y los botones Revisar, Aprobar y Rechazar gestionan la autorización. Después de aprobar Claude, pulsa Generar ahora o envía /run ID. No se ejecuta una llamada de pago solo por aprobar. Se procesa como máximo una generación explícita por sondeo, tras las decisiones y las órdenes /stop del lote. Los controles de cuota, reserva, caducidad y toma única siguen vigentes. No se reintentan llamadas fallidas. El sondeo automático continúa siendo horario; puedes usar Actions para adelantarlo. No se ha aumentado la frecuencia para evitar costes de infraestructura. Una parada en Telegram no cancela instantáneamente una llamada ya iniciada. La conciliación y publicación siguen siendo manuales.
+
+## Exportación PDF para revisión
+
+Envía `/pdf ID` con el ID de una generación completa o de una propuesta de publicación. El bot envía un PDF de revisión al operador privado autorizado. No consume tokens de Claude ni publica productos. Rechaza resultados truncados y solicitudes canceladas, rechazadas o bloqueadas. El formato inicial incluye portada, encabezados, numeración y texto literal; las tablas Markdown todavía no se convierten en tablas visuales. Revisa el archivo antes de venderlo. El sondeo sigue siendo horario.

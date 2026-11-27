@@ -31,7 +31,8 @@ def notify(memory, telegram, identifier):
         rows.append([button("Generar ahora", "g", row)])
     telegram.buttons(summary, rows)
     # Keep full hash commands available for older clients and audits.
-    telegram.send(f"/approve {identifier} {row['digest']}\n/reject {identifier} {row['digest']}")
+    if row["status"] == "pending":
+        telegram.send(f"/approve {identifier} {row['digest']}\n/reject {identifier} {row['digest']}")
 
 
 def on_callback(memory, telegram, callback):
@@ -84,6 +85,12 @@ def on_message(memory, telegram, message):
                   ("Comprometido", "committed_cents"), ("Disponible", "available_cents"))
         telegram.send("BODIVE · Presupuesto\n" + "\n".join(
             f"{label}: {report[key] / 100:.2f} EUR" for label, key in labels))
+        return
+    if match := re.fullmatch(rf"/pdf ({ID})", text):
+        from .pdf_export import from_approval
+        document = from_approval(memory, match[1])
+        telegram.document(document, "bodive-review.pdf")
+        telegram.send("PDF para revisión. No implica autorización ni publicación.")
         return
     if match := re.fullmatch(rf"/run ({ID})", text):
         return match[1]
@@ -143,7 +150,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
