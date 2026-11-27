@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bodive"
+version = "0.1.0"
+description = "Supervised digital product operations"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+cloud = ["psycopg[binary]==3.3.3"]
+
+[project.scripts]
+bodive = "bodive.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["bodive*"]
+
+[tool.setuptools.package-data]
+bodive = ["schema.sql"]

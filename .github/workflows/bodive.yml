@@ -1,0 +1,115 @@
+name: BODIVE
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operation
+        type: choice
+        required: true
+        options: [demo, plan, propose-publish, propose-claude, propose-manual, notify, poll, run-claude, complete, income, report, stop, resume]
+      topic:
+        description: Topic for plan
+        type: string
+      id:
+        description: Dossier or approval ID
+        type: string
+      draft_id:
+        description: Optional reconciled Claude approval ID
+        type: string
+      cents:
+        description: EUR cents for expenses, income or reconciliation
+        type: string
+      reference:
+        description: Receipt reference or publication URL
+        type: string
+      manual_kind:
+        description: Type of manual proposal
+        type: choice
+        options: [expense, advertise]
+      description:
+        description: Exact scope for manual proposal
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  simulation:
+    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'demo'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m bodive.cli plan "Client onboarding"
+      - run: python -m bodive.cli report
+
+  supervised:
+    if: >-
+      github.ref_name == github.event.repository.default_branch &&
+      vars.BODIVE_LIVE_ENABLED == 'yes' &&
+      (github.event_name == 'schedule' || inputs.operation != 'demo')
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    environment: bodive
+    concurrency:
+      group: bodive-live
+      cancel-in-progress: false
+    env:
+      BODIVE_MODE: live
+      BODIVE_LIVE_ENABLED: 'yes'
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_OPERATOR_ID: ${{ secrets.TELEGRAM_OPERATOR_ID }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+      CLAUDE_INPUT_CENTS_PER_MILLION: ${{ vars.CLAUDE_INPUT_CENTS_PER_MILLION }}
+      CLAUDE_OUTPUT_CENTS_PER_MILLION: ${{ vars.CLAUDE_OUTPUT_CENTS_PER_MILLION }}
+      PGSSLROOTCERT: /tmp/bodive-supabase-ca.crt
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install ".[cloud]"
+      - name: Configure database TLS
+        env:
+          SUPABASE_CA_CERT: ${{ secrets.SUPABASE_CA_CERT }}
+        run: |
+          umask 077
+          test -n "$SUPABASE_CA_CERT"
+          printf '%s\n' "$SUPABASE_CA_CERT" > "$PGSSLROOTCERT"
+      - name: Run selected operation
+        env:
+          OPERATION: ${{ inputs.operation || 'poll' }}
+          TOPIC: ${{ inputs.topic }}
+          ITEM_ID: ${{ inputs.id }}
+          DRAFT_ID: ${{ inputs.draft_id }}
+          CENTS: ${{ inputs.cents }}
+          REFERENCE: ${{ inputs.reference }}
+          MANUAL_KIND: ${{ inputs.manual_kind }}
+          DESCRIPTION: ${{ inputs.description }}
+        run: |
+          case "$OPERATION" in
+            plan) bodive plan -- "$TOPIC" ;;
+            propose-publish)
+              if [[ -n "$DRAFT_ID" ]]; then
+                bodive propose-publish --draft-id="$DRAFT_ID" -- "$ITEM_ID"
+              else
+                bodive propose-publish -- "$ITEM_ID"
+              fi ;;
+            propose-claude|notify|run-claude) bodive "$OPERATION" -- "$ITEM_ID" ;;
+            propose-manual) bodive propose-manual -- "$MANUAL_KIND" "$CENTS" "$DESCRIPTION" ;;
+            complete) bodive complete -- "$ITEM_ID" "$CENTS" "$REFERENCE" ;;
+            income) bodive income -- "$CENTS" "$REFERENCE" ;;
+            poll|report|stop|resume) bodive "$OPERATION" ;;
+            *) exit 2 ;;
+          esac

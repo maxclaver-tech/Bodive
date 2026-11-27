@@ -1,0 +1,75 @@
+"""Telegram decisions use a dedicated bot and one allowlisted private account."""
+
+import json
+import re
+
+from .memory import MANUAL_KINDS, Refused, canonical
+
+ID = r"[0-9a-f]{32}"
+DIGEST = r"[0-9a-f]{64}"
+
+
+def notify(memory, telegram, identifier):
+    row = memory.get(identifier)
+    telegram.send(
+        f"BODIVE {row['kind']} · cap EUR {row['max_cents'] / 100:.2f}\n"
+        f"Status: {row['status']} · expires {row['expires_at']}\n"
+        f"Review: /review {identifier}\n"
+        f"Approve: /approve {identifier} {row['digest']}\n"
+        f"Reject: /reject {identifier} {row['digest']}"
+    )
+
+
+def on_message(memory, telegram, message):
+    chat = message.get("chat", {})
+    sender = message.get("from", {})
+    if (chat.get("type") != "private" or chat.get("id") != telegram.operator
+            or sender.get("id") != telegram.operator or sender.get("is_bot") is not False
+            or "forward_origin" in message or "via_bot" in message):
+        return
+    text = message.get("text", "").strip()
+    actor = f"telegram:{telegram.operator}"
+    if text == "/stop":
+        memory.stop(actor)
+        telegram.send("BODIVE stopped. Pending and approved operations were cancelled.")
+        return
+    if text == "/budget":
+        telegram.send(canonical(memory.report()))
+        return
+    if match := re.fullmatch(rf"/dossier ({ID})", text):
+        telegram.send(json.dumps(memory.load(match[1]), ensure_ascii=False, indent=2))
+        return
+    if match := re.fullmatch(rf"/(approve|reject) ({ID}) ({DIGEST})", text):
+        verb, identifier, digest = match.groups()
+        memory.decide(identifier, digest, verb == "approve", actor)
+        telegram.send(f"Recorded: {verb} {identifier}")
+        return
+    if match := re.fullmatch(rf"/(review|claim|ready|result) ({ID})", text):
+        action, identifier = match.groups()
+        if action == "claim":
+            payload = memory.claim(identifier, MANUAL_KINDS)
+            telegram.send("Manual operation claimed. If delivery fails, review its record before acting.\n"
+                          + json.dumps(payload, ensure_ascii=False, indent=2))
+        elif action == "ready":
+            memory.check_claim(identifier, MANUAL_KINDS)
+            telegram.send(f"Active manual claim: {identifier}. Verify immediately before acting.")
+        else:
+            row = memory.get(identifier)
+            value = row["payload" if action == "review" else "result"]
+            if value is None:
+                raise Refused("No result has been recorded")
+            telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
+                          + json.dumps(json.loads(value), ensure_ascii=False, indent=2))
+        return
+    telegram.send("Commands: /dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
+                  "/claim ID, /ready ID, /result ID, /budget, /stop")
+
+
+def poll(memory, telegram):
+    for update in telegram.updates(memory.offset()):
+        try:
+            on_message(memory, telegram, update.get("message", {}))
+        except Refused as exc:
+            # Decisions and claims already committed remain effective if the reply was lost.
+            telegram.send(str(exc))
+        memory.offset(update["update_id"] + 1)
