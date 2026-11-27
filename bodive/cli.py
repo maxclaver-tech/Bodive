@@ -63,7 +63,9 @@ def proposal(args, memory):
             draft = memory.get(args.draft_id)
             if (draft["kind"] != "claude" or draft["status"] != "done" or draft["blocked"]
                     or json.loads(draft["payload"])["dossier_id"] != args.id
-                    or "draft" not in json.loads(draft["result"])):
+                    or not draft["result"]
+                    or not json.loads(draft["result"]).get("draft")
+                    or json.loads(draft["result"]).get("stop_reason") != "end_turn"):
                 raise Refused("Use a reconciled and valid Claude draft from this dossier")
             dossier["product_markdown"] = json.loads(draft["result"])["draft"]
             dossier["listing"]["description"] = (
@@ -81,7 +83,8 @@ def proposal(args, memory):
             int(required("CLAUDE_INPUT_CENTS_PER_MILLION", r"[1-9][0-9]{0,4}")),
             int(required("CLAUDE_OUTPUT_CENTS_PER_MILLION", r"[1-9][0-9]{0,4}")),
         )
-    payload = {"dossier_id": args.id, "model": model, "prompt": creator.prompt_for(dossier)}
+    payload = {"dossier_id": args.id, "model": model, "prompt": creator.prompt_for(dossier),
+               "max_tokens": finance.OUTPUT_BILLING_BOUND}
     return memory.propose("claude", payload, commitment)
 
 
@@ -110,14 +113,15 @@ def execute(args, memory, http):
                 result = client.generate(payload, lambda: memory.check_claim(args.id, {"claude"}))
             else:
                 result = {"draft": "Offline draft. No Claude API call was made.",
-                          "usage": {}, "model": payload["model"]}
+                          "usage": {}, "model": payload["model"], "stop_reason": "end_turn"}
             memory.record_draft(args.id, result)
         except Exception as exc:
             memory.operation_failed(args.id, type(exc).__name__)
             raise
         if not live:
             memory.finish(args.id, 0, f"simulation:{args.id}")
-        return {"id": args.id, "draft_saved": True, "reconciliation_required": live}
+        return {"id": args.id, "draft_saved": True, "complete_draft": result.get("stop_reason") == "end_turn",
+                "reconciliation_required": live}
     if command == "claim":
         if live:
             raise Refused("Claim live manual operations in Telegram")
