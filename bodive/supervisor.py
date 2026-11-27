@@ -156,6 +156,14 @@ def on_message(memory, telegram, message):
 
 
 def poll(memory, telegram):
+    with memory.poll_lock() as acquired:
+        if not acquired:
+            return False
+        _poll_locked(memory, telegram)
+        return True
+
+
+def _poll_locked(memory, telegram):
     # Process decisions and stop commands before starting any paid operation.
     # Run at most one explicitly requested generation per poll; never auto-retry.
     requested = []

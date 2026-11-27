@@ -23,6 +23,8 @@ class Http:
         })
         try:
             timeout = 120 if service == "Claude" and url == "https://api.anthropic.com/v1/messages" else 12
+            if service == "Telegram" and url.endswith("/getUpdates") and isinstance(body, dict):
+                timeout = max(12, min(30, int(body.get("timeout", 0)) + 8))
             with build_opener(NoRedirect).open(request, timeout=timeout) as response:
                 raw = response.read(1_000_001)
             if len(raw) > 1_000_000:
@@ -70,7 +72,8 @@ class GitHubResearch:
 
 
 class Telegram:
-    def __init__(self, http, token, operator):
+    def __init__(self, http, token, operator, poll_wait=0):
+        self.poll_wait = poll_wait
         self.http = http
         self.token = token
         self.operator = operator
@@ -115,7 +118,7 @@ class Telegram:
         return self.call("answerCallbackQuery", {"callback_query_id": identifier, "text": text})
 
     def updates(self, offset):
-        return self.call("getUpdates", {"offset": offset, "limit": 20, "timeout": 0,
+        return self.call("getUpdates", {"offset": offset, "limit": 20, "timeout": self.poll_wait,
                                         "allowed_updates": ["message", "callback_query"]})
 
 
