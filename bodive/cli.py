@@ -4,7 +4,7 @@ import os
 import re
 import sys
 
-from . import creator, director, finance, gumroad, supervisor
+from . import chapters, creator, director, finance, gumroad, supervisor
 from .connectors import Claude, GitHubResearch, Http, Telegram
 from .memory import MANUAL_KINDS, Memory, Refused
 
@@ -34,6 +34,10 @@ def parser():
     publication = commands.add_parser("propose-publish")
     publication.add_argument("id")
     publication.add_argument("--draft-id")
+    publication.add_argument("--chapter-ids", nargs=6)
+    chapter = commands.add_parser("propose-chapter")
+    chapter.add_argument("id")
+    chapter.add_argument("chapter", type=int)
     manual = commands.add_parser("propose-manual")
     manual.add_argument("kind", choices=("advertise", "expense"))
     manual.add_argument("cents", type=int)
@@ -59,10 +63,15 @@ def proposal(args, memory):
         return memory.propose(args.kind, {"instructions": args.description}, args.cents)
     dossier = memory.load(args.id)
     if args.command == "propose-publish":
+        if args.chapter_ids:
+            if args.draft_id:
+                raise Refused("Choose either a draft or six chapters")
+            dossier["product_markdown"] = chapters.assemble(memory, args.id, args.chapter_ids)
         if args.draft_id:
             draft = memory.get(args.draft_id)
             if (draft["kind"] != "claude" or draft["status"] != "done" or draft["blocked"]
                     or json.loads(draft["payload"])["dossier_id"] != args.id
+                    or "chapter" in json.loads(draft["payload"])
                     or not draft["result"]
                     or not json.loads(draft["result"]).get("draft")
                     or json.loads(draft["result"]).get("stop_reason") != "end_turn"):
@@ -74,6 +83,9 @@ def proposal(args, memory):
             )
         return memory.propose("publish", gumroad.publication(args.id, dossier), 0)
 
+    is_chapter = args.command == "propose-chapter"
+    limit = chapters.LIMIT if is_chapter else finance.OUTPUT_BILLING_BOUND
+    prompt = chapters.prompt(dossier["evidence"]["topic"], args.chapter) if is_chapter else creator.prompt_for(dossier)
     if memory.mode == "simulation":
         model, commitment = "offline-simulation", 100
     else:
@@ -82,9 +94,12 @@ def proposal(args, memory):
             model,
             int(required("CLAUDE_INPUT_CENTS_PER_MILLION", r"[1-9][0-9]{0,4}")),
             int(required("CLAUDE_OUTPUT_CENTS_PER_MILLION", r"[1-9][0-9]{0,4}")),
+            output_limit=limit,
         )
-    payload = {"dossier_id": args.id, "model": model, "prompt": creator.prompt_for(dossier),
-               "max_tokens": finance.OUTPUT_BILLING_BOUND}
+    payload = {"dossier_id": args.id, "model": model, "prompt": prompt,
+               "max_tokens": limit}
+    if is_chapter:
+        payload["chapter"] = args.chapter
     return memory.propose("claude", payload, commitment)
 
 

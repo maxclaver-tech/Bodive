@@ -41,6 +41,18 @@ def on_message(memory, telegram, message):
         telegram.send("BODIVE · Presupuesto\n" + "\n".join(
             f"{label}: {report[key] / 100:.2f} EUR" for label, key in labels))
         return
+    if match := re.fullmatch(rf"/chapter ({ID}) ([1-6])", text):
+        from . import cli
+        args = cli.parser().parse_args(["propose-chapter", match[1], match[2]])
+        row = cli.proposal(args, memory)
+        notify(memory, telegram, row["id"])
+        return
+    if match := re.fullmatch(rf"/assemble ({ID}) ((?:{ID} ){5}{ID})", text):
+        from . import cli
+        args = cli.parser().parse_args(["propose-publish", match[1], "--chapter-ids", *match[2].split()])
+        row = cli.proposal(args, memory)
+        notify(memory, telegram, row["id"])
+        return
     if match := re.fullmatch(rf"/dossier ({ID})", text):
         telegram.send(json.dumps(memory.load(match[1]), ensure_ascii=False, indent=2))
         return
@@ -75,7 +87,8 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Commands: /dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
+    telegram.send("Comandos: /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+                  "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
 

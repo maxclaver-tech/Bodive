@@ -28,3 +28,9 @@
 ## Comprobar la configuración sin activar BODIVE
 
 Mantén `BODIVE_LIVE_ENABLED` sin definir o en `no`. Ejecuta **Actions → Integration readiness** en la rama por defecto. El workflow prueba la simulación, muestra la presencia de cada secreto sin revelar su valor y valida el formato de las tarifas de Claude. Usa el entorno GitHub `bodive` y ejecuta la simulación aunque falten credenciales. Deja la conectividad y la validez de las credenciales para la activación autorizada.
+
+## Generación por capítulos (v0.3, fase inicial)
+
+Envía /chapter DOSIER 1 (hasta 6) por Telegram y ejecuta poll. Cada capítulo tiene una autorización independiente, con un límite de 2.400 tokens y una reserva calculada con las tarifas configuradas. Revisa y aprueba antes de ejecutar run-claude con el ID de esa autorización. Consulta /result y concilia el cargo real mediante complete. No se repiten llamadas automáticamente. El límite de tres intentos diarios UTC y veinte de por vida sigue vigente. Un capítulo truncado no se puede ensamblar; solicita una autorización nueva solo para ese capítulo. Antes de empezar, comprueba el presupuesto para los seis capítulos (con tarifas mínimas Haiku: 6 × 2,03 EUR = 12,18 EUR de reservas máximas si todas siguen abiertas). No es una autorización conjunta.
+
+Cuando los seis capítulos estén completos y conciliados, envía /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6 y ejecuta poll. Esto crea una propuesta de publicación Markdown sin publicar nada. Revisa la coherencia, los derechos y la calidad manualmente. El ensamblador rechaza capítulos repetidos, incompletos o de otro dosier. PDF y entrega como archivo quedan pendientes.
