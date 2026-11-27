@@ -86,9 +86,17 @@ class Telegram:
             self.call("sendMessage", {"chat_id": self.operator, "text": text[start:start + 1500],
                                       "link_preview_options": {"is_disabled": True}})
 
+    def buttons(self, text, rows):
+        return self.call("sendMessage", {"chat_id": self.operator, "text": text,
+                    "reply_markup": {"inline_keyboard": rows},
+                    "link_preview_options": {"is_disabled": True}})
+
+    def answer(self, identifier, text):
+        return self.call("answerCallbackQuery", {"callback_query_id": identifier, "text": text})
+
     def updates(self, offset):
         return self.call("getUpdates", {"offset": offset, "limit": 20, "timeout": 0,
-                                        "allowed_updates": ["message"]})
+                                        "allowed_updates": ["message", "callback_query"]})
 
 
 class Claude:
