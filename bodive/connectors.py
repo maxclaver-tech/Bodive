@@ -1,6 +1,7 @@
 """Fixed-endpoint, bounded HTTP adapters."""
 
 import json
+from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -16,7 +17,7 @@ class NoRedirect(HTTPRedirectHandler):
 
 class Http:
     def request(self, service, url, body=None, headers=None):
-        data = None if body is None else json.dumps(body).encode()
+        data = body if isinstance(body, bytes) else (None if body is None else json.dumps(body).encode())
         request = Request(url, data=data, headers={
             "User-Agent": "BODIVE/0.1", "Content-Type": "application/json", **(headers or {}),
         })
@@ -85,6 +86,25 @@ class Telegram:
         for start in range(0, len(text), 1500):
             self.call("sendMessage", {"chat_id": self.operator, "text": text[start:start + 1500],
                                       "link_preview_options": {"is_disabled": True}})
+
+    def document(self, data, filename):
+        if not isinstance(data, bytes) or len(data) > 5_000_000 or not data.startswith(b"%PDF-"):
+            raise Refused("Invalid PDF document")
+        if filename != "bodive-review.pdf":
+            raise Refused("Invalid document filename")
+        boundary = uuid4().hex
+        prefix = (
+            f"--{boundary}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n"
+            f"{self.operator}\r\n--{boundary}\r\n"
+            f"Content-Disposition: form-data; name=\"document\"; filename=\"{filename}\"\r\n"
+            "Content-Type: application/pdf\r\n\r\n"
+        ).encode()
+        body = prefix + data + f"\r\n--{boundary}--\r\n".encode()
+        result = self.http.request("Telegram", f"https://api.telegram.org/bot{self.token}/sendDocument",
+                                   body, {"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        if result.get("ok") is not True:
+            raise Refused("Telegram rejected the PDF")
+        return result
 
     def buttons(self, text, rows):
         return self.call("sendMessage", {"chat_id": self.operator, "text": text,
