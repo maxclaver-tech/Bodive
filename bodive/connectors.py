@@ -20,7 +20,8 @@ class Http:
             "User-Agent": "BODIVE/0.1", "Content-Type": "application/json", **(headers or {}),
         })
         try:
-            with build_opener(NoRedirect).open(request, timeout=12) as response:
+            timeout = 120 if service == "Claude" and url == "https://api.anthropic.com/v1/messages" else 12
+            with build_opener(NoRedirect).open(request, timeout=timeout) as response:
                 raw = response.read(1_000_001)
             if len(raw) > 1_000_000:
                 raise Refused(f"{service}: response exceeded size limit")
@@ -30,8 +31,16 @@ class Http:
             return result
         except HTTPError as exc:
             raise Refused(f"{service}: HTTP {exc.code}") from None
-        except (URLError, OSError, ValueError):
-            raise Refused(f"{service}: transport or response error") from None
+        except TimeoutError:
+            raise Refused(f"{service}: request timed out; delivery uncertain") from None
+        except URLError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise Refused(f"{service}: request timed out; delivery uncertain") from None
+            raise Refused(f"{service}: network connection error") from None
+        except OSError:
+            raise Refused(f"{service}: transport error") from None
+        except ValueError:
+            raise Refused(f"{service}: invalid response format") from None
 
 
 class GitHubResearch:
