@@ -1,0 +1,65 @@
+name: Integration readiness
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: bodive
+    env:
+      BODIVE_MODE: simulation
+      BODIVE_LIVE_ENABLED: 'no'
+      REPOSITORY_LIVE_FLAG: ${{ vars.BODIVE_LIVE_ENABLED }}
+      HAS_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL != '' }}
+      HAS_DATABASE_CA: ${{ secrets.SUPABASE_CA_CERT != '' }}
+      HAS_TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN != '' }}
+      HAS_TELEGRAM_OPERATOR: ${{ secrets.TELEGRAM_OPERATOR_ID != '' }}
+      HAS_CLAUDE_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+      CLAUDE_INPUT_RATE: ${{ vars.CLAUDE_INPUT_CENTS_PER_MILLION }}
+      CLAUDE_OUTPUT_RATE: ${{ vars.CLAUDE_OUTPUT_CENTS_PER_MILLION }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Check settings and exercise the offline flow
+        run: |
+          python -m unittest discover -s tests -v
+          python -m bodive.cli plan 'Client onboarding'
+          python - <<'PY'
+          import os
+          from bodive.finance import claude_commitment
+          from bodive.memory import Refused
+
+          settings = {
+              "SUPABASE_DATABASE_URL": "HAS_DATABASE_URL",
+              "SUPABASE_CA_CERT": "HAS_DATABASE_CA",
+              "TELEGRAM_BOT_TOKEN": "HAS_TELEGRAM_TOKEN",
+              "TELEGRAM_OPERATOR_ID": "HAS_TELEGRAM_OPERATOR",
+              "ANTHROPIC_API_KEY": "HAS_CLAUDE_KEY",
+          }
+          for name, flag in settings.items():
+              status = "present" if os.environ[flag] == "true" else "missing"
+              print(f"{name}: {status}")
+          try:
+              claude_commitment(
+                  os.environ["CLAUDE_MODEL"],
+                  int(os.environ["CLAUDE_INPUT_RATE"]),
+                  int(os.environ["CLAUDE_OUTPUT_RATE"]),
+              )
+          except (ValueError, Refused):
+              print("Claude model and rate configuration: incomplete or invalid")
+          else:
+              print("Claude model and rate configuration: structurally valid")
+          if os.environ["REPOSITORY_LIVE_FLAG"] == "yes":
+              raise SystemExit("Live mode is enabled at the repository or environment level")
+          print("Live mode disabled. No provider was contacted.")
+          PY
