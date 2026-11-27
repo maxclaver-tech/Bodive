@@ -1,0 +1,6 @@
+**
+!pyproject.toml
+!bodive/
+!bodive/**
+**/__pycache__
+**/*.pyc

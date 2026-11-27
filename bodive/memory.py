@@ -61,6 +61,23 @@ class Memory:
         finally:
             conn.close()
 
+    @contextmanager
+    def poll_lock(self):
+        # A session-level PostgreSQL lock spans network I/O without holding the
+        # budget transaction open. All live polling entry points use this lock.
+        if self.mode != "live":
+            yield True
+            return
+        import psycopg
+        with psycopg.connect(self.location, autocommit=True, connect_timeout=8,
+                             sslmode="verify-full") as conn:
+            acquired = conn.execute("select pg_try_advisory_lock(183520114, 91731)").fetchone()[0]
+            try:
+                yield acquired
+            finally:
+                if acquired:
+                    conn.execute("select pg_advisory_unlock(183520114, 91731)")
+
     def audit(self, query, name, **detail):
         query("insert into events values (?, ?, ?, ?)", uuid4().hex, now().isoformat(),
               name, canonical(detail))

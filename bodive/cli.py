@@ -51,7 +51,7 @@ def parser():
             entry.add_argument("id")
         entry.add_argument("cents", type=int)
         entry.add_argument("reference")
-    for name in ("poll", "stop", "resume", "report", "events"):
+    for name in ("poll", "serve", "stop", "resume", "report", "events"):
         commands.add_parser(name)
     return root
 
@@ -141,6 +141,16 @@ def execute(args, memory, http):
         if live:
             raise Refused("Claim live manual operations in Telegram")
         return memory.claim(args.id, MANUAL_KINDS)
+    if command == "serve":
+        if not live:
+            raise Refused("Permanent service requires live mode")
+        if os.environ.get("BODIVE_WORKER_ENABLED") != "yes":
+            raise Refused("Permanent service requires BODIVE_WORKER_ENABLED=yes")
+        from .worker import serve
+        operator = telegram(http)
+        operator.poll_wait = 15
+        serve(memory, operator)
+        return {"ok": True}
     if command in {"poll", "notify"}:
         if not live:
             raise Refused("Telegram network calls require live mode")
