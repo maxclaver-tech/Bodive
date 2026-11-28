@@ -61,3 +61,7 @@ El contenedor Docker ejecuta `bodive serve`. Configura las mismas variables y se
 ## Investigación de conversaciones públicas
 
 `/scan DOSIER` consulta una vez la API pública HN Search de Algolia, usando el tema inglés del dosier y una muestra máxima de 10 publicaciones del último año. Comparte el límite existente de 12 investigaciones por día UTC y respeta la parada de emergencia. Guarda título, fecha, puntos, comentarios y enlace fijo al hilo; no descarga comentarios ni sigue enlaces. `/signals DOSIER` recupera la última búsqueda guardada sin red. No usa Claude ni contrata API. Los resultados son señales de una comunidad tecnológica sesgada, no compras, precios de competidores ni validación de demanda. Un resultado vacío tampoco invalida un mercado. No se realizan búsquedas periódicas ni se inicia ninguna inversión automáticamente.
+
+## Exploración de oportunidades
+
+`/discover` investiga cuatro categorías predefinidas sin Claude, con cuatro búsquedas como máximo y la cuota compartida de investigación. Ordena candidatos por publicaciones y comentarios encontrados, no por beneficio ni ventas. `/opportunities` recupera el último informe guardado. `/shortlist BUSQUEDA N` crea un dosier local con supuestos iniciales de 12 EUR de precio y 4 EUR de coste unitario y conserva las fuentes. No autoriza gasto, generación ni publicación. Es exploración bajo demanda, no un agente periódico ni una búsqueda abierta de todo el mercado. Las señales pueden no ser relevantes; se requiere validar competencia, demanda de pago y costes.
