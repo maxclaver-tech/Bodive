@@ -20,3 +20,25 @@ class ReconciliationTests(unittest.TestCase):
     def test_invalid(self):
         with self.assertRaises(ValueError):
             preview([{}])
+
+
+    def test_provider_preview(self):
+        from unittest.mock import Mock, patch
+        from bodive.store import Store
+        sale = dict(id="abc", currency="eur", price=1200, test=False,
+                    refunded=False, disputed=False, chargebacked=False,
+                    email="private@example.invalid")
+        http = Mock()
+        http.request.return_value = {"success": True, "sales": [
+            sale, sale, dict(sale, id="refund", refunded=True),
+            dict(sale, id="unknown", test=None)], "next_page_key": "more"}
+        with patch.dict("os.environ", {"GUMROAD_ACCESS_TOKEN": "fake-token"}):
+            result = Store(http).reconciliation()
+        self.assertEqual(result["currencies"]["EUR"]["sale"], 1200)
+        self.assertIsNone(result["currencies"]["EUR"]["net"])
+        self.assertIsNone(result["currencies"]["EUR"]["fee"])
+        self.assertEqual(result["omitted"], 2)
+        self.assertTrue(result["limited"])
+        self.assertFalse(result["booked"])
+        self.assertNotIn("private@", str(result))
+        self.assertEqual(http.request.call_count, 1)
