@@ -42,6 +42,16 @@ def on_callback(memory, telegram, callback):
     if (chat.get("type") != "private" or chat.get("id") != telegram.operator
             or sender.get("id") != telegram.operator or sender.get("is_bot") is not False):
         return None
+    plan_match = re.fullmatch(rf"([xy]):({ID}):([0-9a-f]{{24}})", callback.get("data",""))
+    if plan_match:
+        action, identifier, prefix = plan_match.groups()
+        row = memory.validation(identifier)
+        if row["digest"][:24]!=prefix:
+            raise Refused("La propuesta no coincide con el botón")
+        memory.decide_validation(identifier,row["digest"],action=="x",f"telegram:{telegram.operator}")
+        telegram.answer(callback["id"],"Plan aceptado" if action=="x" else "Plan rechazado")
+        telegram.send("Decisión registrada. No autoriza gastos, publicaciones ni ejecución automática.")
+        return None
     match = re.fullmatch(rf"([avrg]):({ID}):([0-9a-f]{{24}})", callback.get("data", ""))
     if not match:
         return None
@@ -196,6 +206,19 @@ def on_message(memory, telegram, message):
             telegram.send(f"{item['title']}\n{item['url']}\n"
                           f"Puntos: {item['points']} · Comentarios: {item['comments']}\n{item['published_at']}")
         return
+    if match := re.fullmatch(rf"/(proposal|validation) ({ID})",text):
+        from . import validation
+        action, identifier = match.groups()
+        if action=="proposal":
+            identifier=memory.propose_validation(validation.build(memory,identifier))
+        row=memory.validation(identifier)
+        telegram.send(validation.report(row["payload"]))
+        telegram.send(f"Propuesta: {identifier}\nEstado: {row['status']}\nVence UTC: {row['expires_at']}")
+        if row["status"]=="pending":
+            telegram.buttons("Aceptar únicamente el plan sin gasto, no una inversión.",[[
+                {"text":"Aceptar plan","callback_data":f"x:{identifier}:{row['digest'][:24]}"},
+                {"text":"Rechazar","callback_data":f"y:{identifier}:{row['digest'][:24]}"}]])
+        return
     if match := re.fullmatch(rf"/decision ({ID})(?: ([0-9]{{1,7}}) ([0-9]{{1,7}}) ([0-9]{{1,5}}))?", text):
         from . import decision
         identifier, price, unit, fixed = match.groups()
@@ -316,7 +339,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
