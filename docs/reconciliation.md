@@ -1,0 +1,3 @@
+# Conciliación provisional
+
+Ejecutar `python -m bodive.cli reconcile-preview eventos.json`. El archivo contiene una lista de objetos con id estable de operación, sale_id, currency (ISO), kind (sale, fee, refund), amount_minor (entero no negativo) y evidence (referencia opaca sin datos personales). No introducir datos de clientes ni secretos. Las monedas no se convierten. Los conflictos se excluyen y requieren revisión. Los totales son provisionales, no prueban cobros ni modifican el libro contable. La normalización de respuestas Gumroad requiere validar los campos del proveedor; no inferir comisiones ausentes.
