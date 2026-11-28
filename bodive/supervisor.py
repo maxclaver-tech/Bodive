@@ -206,6 +206,28 @@ def on_message(memory, telegram, message):
             telegram.send(f"{item['title']}\n{item['url']}\n"
                           f"Puntos: {item['points']} · Comentarios: {item['comments']}\n{item['published_at']}")
         return
+    if match := re.fullmatch(rf"/release ({ID}) (es|en)",text):
+        from . import release
+        telegram.document(release.package(memory,*match.groups()),"bodive-release-review.zip")
+        telegram.send("Paquete localizado con portada de revisión. No publicar el ZIP. No autoriza gasto ni lanzamiento.")
+        return
+    if match := re.fullmatch(rf"/receipt ({ID}) ([0-9]{{1,9}}) ([0-9]{{1,9}}) ([A-Za-z0-9._-]{{1,100}}) CONFIRMO",text):
+        identifier,gross,deductions,reference=match.groups()
+        memory.record_product_receipt(identifier,int(gross),int(deductions),reference,actor)
+        telegram.send("Recibo declarado registrado una sola vez. Comprueba el justificante; no es una verificación independiente.")
+        return
+    if match := re.fullmatch(rf"/sales ({ID})",text):
+        identifier=match[1]
+        r=memory.product_receipts(identifier)
+        p=memory.product_report(identifier)
+        telegram.send(f"BODIVE · Contabilidad por producto\n{p['topic']}\n"
+                      f"Recibos declarados: {r['receipts']}\nBruto: {r['gross']/100:.2f} EUR\n"
+                      f"Deducciones: {r['deductions']/100:.2f} EUR\nNeto: {r['net']/100:.2f} EUR\n"
+                      f"Costes directos registrados: {p['cost_cents']/100:.2f} EUR\n"
+                      f"Resultado directo: {(r['net']-p['cost_cents'])/100:.2f} EUR\n"
+                      f"Reservas pendientes: {p['reserved_cents']/100:.2f} EUR\n"
+                      "Sin reparto de costes comunes, devoluciones posteriores ni verificación automática. Un recibo no equivale necesariamente a una venta.")
+        return
     if text == "/portfolio":
         rows=memory.portfolio()
         if not rows:
@@ -371,7 +393,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /release PROPUESTA es|en, /sales DOSIER, /receipt DOSIER BRUTO DEDUCCIONES RECIBO CONFIRMO, /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
