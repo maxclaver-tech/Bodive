@@ -3,6 +3,7 @@ import signal
 import threading
 import logging
 from . import supervisor
+from .diagnostics import category
 
 
 def serve(memory, telegram):
@@ -23,6 +24,6 @@ def serve(memory, telegram):
             stop.wait(1 if acquired else 5)
         except Exception as exc:
             # Never log exception content: provider and DB errors may contain secrets.
-            logger.warning("Poll failed (%s); next poll in 15 seconds", type(exc).__name__)
+            logger.warning("Poll failed (%s); next poll in 15 seconds", category(exc))
             stop.wait(15)
     logger.info("BODIVE worker stopped")
