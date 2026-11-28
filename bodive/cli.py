@@ -35,6 +35,12 @@ def parser():
     publication.add_argument("id")
     publication.add_argument("--draft-id")
     publication.add_argument("--chapter-ids", nargs=6)
+    for name in ("artifact-review", "artifact-handoff"):
+        artifact = commands.add_parser(name)
+        artifact.add_argument("dossier")
+        artifact.add_argument("file")
+        if name == "artifact-handoff":
+            artifact.add_argument("approval")
     chapter = commands.add_parser("propose-chapter")
     chapter.add_argument("id")
     chapter.add_argument("chapter", type=int)
@@ -106,6 +112,16 @@ def proposal(args, memory):
 def execute(args, memory, http):
     command = args.command
     live = memory.mode == "live"
+    if command in {"artifact-review", "artifact-handoff"}:
+        from pathlib import Path
+        from .publication_review import request_review, handoff
+        path = Path(args.file)
+        with path.open("rb") as stream:
+            data = stream.read(5_000_001)
+        if command == "artifact-review":
+            row = request_review(memory, args.dossier, path.name, data)
+            return {key: row[key] for key in ("id", "digest", "expires_at", "payload")}
+        return handoff(memory, args.approval, args.dossier, path.name, data)
     if command == "plan":
         source = GitHubResearch(http) if live else None
         return {"id": director.plan(memory, args.topic, args.price, args.unit_cost,
