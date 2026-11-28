@@ -136,6 +136,36 @@ def on_message(memory, telegram, message):
         telegram.send(f"Dosier de revisión: {identifier}\n/market {identifier}\n/signals {identifier}\n"
                       "Precio y costes iniciales hipotéticos; demanda no validada.")
         return
+    if match := re.fullmatch(rf"/(competitors|prices) ({ID}) (books|etsy)(?: ([A-Za-z0-9 -]{{2,60}}))?", text):
+        from .competition import catalog, summarize
+        action, identifier, source, topic = match.groups()
+        dossier = memory.load(identifier)
+        if action == "competitors":
+            if memory.mode != "live":
+                raise Refused("La búsqueda externa requiere modo live")
+            memory.research_slot()
+            snapshot = catalog(telegram.http, topic or dossier["evidence"]["topic"], source)
+            memory.record_competition(identifier,snapshot)
+        else:
+            snapshot = memory.latest_competition(identifier,source)
+        if snapshot is None:
+            telegram.send("Sin precios guardados. Usa /competitors DOSIER books o etsy.")
+            return
+        stats = summarize(snapshot)
+        msg = (f"BODIVE · Catálogo {source}\nConsulta: {snapshot['query']}\n"
+               f"Fecha UTC: {snapshot['collected_at']}\nMuestra en EUR: {stats['count']}\n"
+               f"De pago: {stats['paid_count']} · gratuitos: {stats['free_count']}\n"
+               f"{snapshot['interpretation']}")
+        if stats["paid_count"]:
+            msg += (f"\nPrecio mínimo: {stats['minimum']/100:.2f} EUR"
+                    f"\nMediana inferior: {stats['median']/100:.2f} EUR"
+                    f"\nPrecio máximo: {stats['maximum']/100:.2f} EUR")
+        if source=="books":
+            msg += "\nLibros digitales, no equivalentes a plantillas."
+        telegram.send(msg)
+        for row in snapshot["observations"]:
+            telegram.send(f"{row['title']}\n{row['price_cents']/100:.2f} EUR\n{row['url']}")
+        return
     if match := re.fullmatch(rf"/(scan|signals) ({ID})", text):
         from .community import search
         action, identifier = match.groups()
@@ -273,7 +303,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 

@@ -273,6 +273,21 @@ class Memory:
                     return detail
         return None
 
+    def record_competition(self, identifier, result):
+        with self.transaction() as query:
+            self.require_running(query)
+            if query("select id from opportunities where id=?", identifier).fetchone() is None:
+                raise Refused("Unknown dossier")
+            self.audit(query, "competition_snapshot", dossier_id=identifier, snapshot=result)
+
+    def latest_competition(self, identifier, source):
+        with self.transaction() as query:
+            for row in query("select detail from events where name='competition_snapshot' order by created_at desc"):
+                detail = json.loads(row["detail"])
+                if detail.get("dossier_id")==identifier and detail["snapshot"]["source"]==source:
+                    return detail["snapshot"]
+        return None
+
     def record_community(self, identifier, result):
         with self.transaction() as query:
             self.require_running(query)
