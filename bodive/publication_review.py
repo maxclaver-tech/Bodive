@@ -31,3 +31,29 @@ def verify_artifact(scope, dossier_id, filename, data):
     ):
         raise Refused("Artifact changed; new review required")
     return actual
+
+
+def request_review(memory, dossier_id, filename, data):
+    memory.load(dossier_id)
+    return memory.propose("publish", review_scope(dossier_id, filename, data), 0)
+
+
+def handoff(memory, identifier, dossier_id, filename, data):
+    """Consume an independent approval only after exact-byte verification."""
+    import json
+    from .memory import now
+    with memory.transaction() as query:
+        memory.require_running(query)
+        timestamp = now().isoformat()
+        row = query("select * from approvals where id=? and kind='publish' "
+                    "and status='approved' and blocked=0 and expires_at>?",
+                    identifier, timestamp).fetchone()
+        if row is None:
+            raise Refused("No active publication approval")
+        scope = verify_artifact(json.loads(row["payload"]), dossier_id, filename, data)
+        query("update approvals set status='claimed', claimed_at=? where id=?",
+              timestamp, identifier)
+        memory.audit(query, "manual_publication_handoff", id=identifier,
+                     sha256=scope["sha256"])
+        return {"approval_id": identifier, "artifact": scope,
+                "status": "manual_handoff_only", "published": False}
