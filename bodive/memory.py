@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -221,18 +222,75 @@ class Memory:
                 raise Refused("Draft could not be attached to the claim")
             self.audit(query, "claude_draft_saved", id=identifier)
 
-    def finish(self, identifier, cents, reference):
+    def pending_costs(self):
+        with self.transaction() as query:
+            return [dict(row) for row in query(
+                "select id,kind,max_cents,claimed_at,result from approvals "
+                "where status='claimed' order by claimed_at limit 50")]
+
+    def hosting_cost(self, cents, reference, actor):
+        # Record an already incurred invoice, not a new purchase. Do not hide
+        # an actual expense even if it takes the budget over its ceiling.
+        if (type(cents) is not int or not 1 <= cents <= BUDGET_CENTS
+                or not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", reference)):
+            raise Refused("Importe o referencia de alojamiento no válido")
+        if self.mode == "live" and not actor.startswith("telegram:"):
+            raise Refused("Live accounting requires Telegram")
+        with self.transaction() as query:
+            self.ledger_entry(query, "hosting:"+reference, "expense", cents, None)
+            self.audit(query, "hosting_recorded", cents=cents, reference=reference, actor=actor)
+            if self.reserved(query, now().isoformat()) > BUDGET_CENTS:
+                query("update control set stopped=1 where id=1")
+                query("update approvals set status='cancelled' where status in ('pending','approved')")
+                query("update approvals set blocked=1 where status='claimed'")
+                self.audit(query, "emergency_stop", actor=actor, reason="budget_exceeded")
+
+    def product_report(self, identifier):
+        with self.transaction() as query:
+            row = query("select dossier from opportunities where id=?", identifier).fetchone()
+            if row is None:
+                raise Refused("Unknown dossier")
+            dossier = json.loads(row["dossier"])
+            costs = 0
+            held = 0
+            completed = set()
+            timestamp = now().isoformat()
+            for item in query("select a.*, l.cents as actual_cents from approvals a "
+                              "left join ledger l on a.id=l.approval_id and l.kind='expense'"):
+                payload = json.loads(item["payload"])
+                if payload.get("dossier_id") != identifier:
+                    continue
+                costs += item["actual_cents"] or 0
+                if item["status"] == "claimed" or (item["status"] == "approved" and item["expires_at"] > timestamp):
+                    held += item["max_cents"]
+                result = json.loads(item["result"] or "{}")
+                if (item["kind"] == "claude" and not item["blocked"]
+                        and result.get("stop_reason") == "end_turn"
+                        and type(payload.get("chapter")) is int):
+                    completed.add(payload["chapter"])
+            return {"topic": dossier["evidence"]["topic"], "cost_cents":costs,
+                    "reserved_cents":held, "completed_chapters":sorted(completed)}
+
+    def finish(self, identifier, cents, reference, actor=None):
         with self.transaction() as query:
             row = query("select * from approvals where id=? and status='claimed'", identifier).fetchone()
             if row is None or type(cents) is not int or not 0 <= cents <= row["max_cents"]:
                 raise Refused("Unknown claim or cost exceeds approved amount")
             if row["kind"] == "publish" and not reference.startswith(("https://", "void:")):
                 raise Refused("Use the published URL or a void reference after confirming no publication")
-            if cents:
+            if actor is not None:
+                if self.mode == "live" and not actor.startswith("telegram:"):
+                    raise Refused("Live accounting requires Telegram")
+                if row["kind"] != "claude":
+                    raise Refused("Telegram reconciliation is limited to Claude")
+                if not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", reference):
+                    raise Refused("Invalid receipt reference")
+                reference = "claude:" + reference
+            if cents or actor is not None:
                 self.ledger_entry(query, reference, "expense", cents, identifier)
             query("update approvals set status='done', result=coalesce(result,?) where id=?",
                   canonical({"reference": reference}), identifier)
-            self.audit(query, "operation_completed", id=identifier, cents=cents, reference=reference)
+            self.audit(query, "operation_completed", id=identifier, cents=cents, reference=reference, actor=actor or "cli")
 
     def ledger_entry(self, query, reference, kind, cents, identifier):
         count = query("insert into ledger values (?, ?, ?, ?, ?) on conflict (reference) do nothing",

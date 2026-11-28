@@ -86,6 +86,36 @@ def on_message(memory, telegram, message):
         telegram.send("BODIVE · Presupuesto\n" + "\n".join(
             f"{label}: {report[key] / 100:.2f} EUR" for label, key in labels))
         return
+    if text == "/pending":
+        rows = memory.pending_costs()
+        if not rows:
+            telegram.send("No hay operaciones pendientes de conciliación.")
+        for row in rows:
+            result = json.loads(row["result"] or "{}")
+            usage = result.get("usage", {})
+            telegram.send(f"{row['id']} | {row['kind']} | reserva {row['max_cents']/100:.2f} EUR\n"
+                          f"UTC: {row['claimed_at']}\nResultado: {result.get('stop_reason', 'sin resultado')}\n"
+                          f"Uso: {json.dumps(usage, ensure_ascii=False)}\n"
+                          "Verifica la factura del proveedor antes de conciliar.")
+        return
+    if match := re.fullmatch(rf"/reconcile ({ID}) ([0-9]{{1,5}}) ([A-Za-z0-9._-]{{1,100}}) CONFIRMO", text):
+        identifier, cents, reference = match.groups()
+        memory.finish(identifier, int(cents), reference, actor=actor)
+        telegram.send(f"Coste verificado registrado: {int(cents)/100:.2f} EUR. Reserva conciliada.\n/budget")
+        return
+    if match := re.fullmatch(r"/hosting ([0-9]{1,5}) ([A-Za-z0-9._-]{1,100}) CONFIRMO", text):
+        cents, reference = match.groups()
+        memory.hosting_cost(int(cents), reference, actor)
+        telegram.send(f"Factura de alojamiento registrada: {int(cents)/100:.2f} EUR.\n/budget")
+        return
+    if match := re.fullmatch(rf"/product ({ID})", text):
+        report = memory.product_report(match[1])
+        telegram.send(f"BODIVE · {report['topic']}\n"
+                      f"Capítulos completos: {report['completed_chapters']}\n"
+                      f"Costes directos registrados: {report['cost_cents']/100:.2f} EUR\n"
+                      f"Reservas pendientes: {report['reserved_cents']/100:.2f} EUR\n"
+                      "Ingresos por producto y reparto de costes comunes todavía no disponibles.")
+        return
     if match := re.fullmatch(rf"/pdf ({ID})", text):
         from .pdf_export import from_approval
         document = from_approval(memory, match[1])
@@ -150,7 +180,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
