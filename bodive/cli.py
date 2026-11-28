@@ -41,6 +41,7 @@ def parser():
         artifact.add_argument("file")
         if name == "artifact-handoff":
             artifact.add_argument("approval")
+    commands.add_parser("reconcile-preview").add_argument("file")
     chapter = commands.add_parser("propose-chapter")
     chapter.add_argument("id")
     chapter.add_argument("chapter", type=int)
@@ -112,6 +113,16 @@ def proposal(args, memory):
 def execute(args, memory, http):
     command = args.command
     live = memory.mode == "live"
+    if command == "reconcile-preview":
+        from .reconciliation import preview
+        with open(args.file, "rb") as stream:
+            raw = stream.read(5_000_001)
+        if len(raw) > 5_000_000:
+            raise Refused("Reconciliation input too large")
+        events = json.loads(raw)
+        if not isinstance(events, list):
+            raise Refused("Expected a list of normalized evidence events")
+        return preview(events)
     if command in {"artifact-review", "artifact-handoff"}:
         from pathlib import Path
         from .publication_review import request_review, handoff
