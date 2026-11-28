@@ -1,0 +1,3 @@
+# Phases 5–7
+
+`bodive performance` reports internal ledger figures, not independently verified sales. `bodive market-preview FILE` validates manually collected evidence (HTTPS URL, observed ISO date, kind competitor/interest/price, note), flags records older than 30 days, and never claims demand validated. `bodive catalog-preview project_tracker OUTPUT.xlsx` or `habit_tracker` creates a private original starter workbook without overwriting existing files. Human quality and rights review remain mandatory. No external actions, paid generation or publishing. These are initial implementations; automated source collection, provider verification and richer commercial templates remain future work.
