@@ -130,8 +130,34 @@ def verify(data):
                       20:f"={col}7-{col}18",21:f'=IF({col}7=0,"",{col}20/{col}7)'}
             if any(ws[f"{col}{r}"].value!=v for r,v in expected.items()):
                 raise Refused("Workbook formula check failed")
-    if wb["Dashboard"]["G16"].value!="=SUM(G4:G15)":
-        raise Refused("Dashboard formula check failed")
+    for name in ("Plan", "Actual"):
+        ws = wb[name]
+        for row in (*range(4, 7), *range(9, 18)):
+            if ws[f"N{row}"].value != f"=SUM(B{row}:M{row})":
+                raise Refused("Annual category formula check failed")
+            for col in "BCDEFGHIJKLM":
+                if ws[f"{col}{row}"].value is not None:
+                    raise Refused("Review template inputs must be empty")
+        if ws.freeze_panes != "B4" or len(ws.data_validations.dataValidation) != 1:
+            raise Refused("Input usability check failed")
+        dv = ws.data_validations.dataValidation[0]
+        if (str(dv.sqref) != "B4:M6 B9:M17" or dv.type != "decimal"
+                or dv.operator != "between" or str(dv.formula1) != "0"
+                or str(dv.formula2) != "100000000" or not dv.showErrorMessage
+                or dv.errorStyle != "stop"):
+            raise Refused("Input validation check failed")
+    dash = wb["Dashboard"]
+    for row, letter in enumerate("BCDEFGHIJKLM", 4):
+        expected = (f"=Plan!{letter}7", f"=Actual!{letter}7",
+                    f"=Plan!{letter}18", f"=Actual!{letter}18",
+                    f"=Actual!{letter}20", f"=Actual!{letter}20-Plan!{letter}20")
+        if any(dash.cell(row, col).value != value for col, value in enumerate(expected, 2)):
+            raise Refused("Dashboard monthly formula check failed")
+    for col in "BCDEFG":
+        if dash[f"{col}16"].value != f"=SUM({col}4:{col}15)":
+            raise Refused("Dashboard annual formula check failed")
+    if len(dash._charts) != 1 or dash.freeze_panes != "B4":
+        raise Refused("Dashboard usability check failed")
 
 def from_validation(memory,identifier):
     memory.check_running()

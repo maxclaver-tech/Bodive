@@ -15,7 +15,16 @@ class ReleaseTests(unittest.TestCase):
             prop=m.propose_validation(validation.build(m,ident))
             m.decide_validation(prop,m.validation(prop)["digest"],True,"test")
             with ZipFile(BytesIO(release.package(m,prop,"es"))) as z:
-                self.assertEqual(len(z.namelist()),6)
+                self.assertEqual(set(z.namelist()), {
+                    "budget-review.xlsx", "cover-review.png", "listing-draft.md",
+                    "marketing-draft.md", "release-checklist.txt", "quality-review.txt",
+                    "SHA256SUMS.txt",
+                })
+                self.assertIn(b"recalculation", z.read("quality-review.txt"))
+                from hashlib import sha256
+                expected = "".join(f"{sha256(z.read(name)).hexdigest()}  {name}\n"
+                                   for name in z.namelist() if name != "SHA256SUMS.txt")
+                self.assertEqual(z.read("SHA256SUMS.txt").decode(), expected)
                 wb=load_workbook(BytesIO(z.read("budget-review.xlsx")))
                 self.assertEqual(wb["Plan"]["A4"].value,"Salario")
                 self.assertEqual(wb["Dashboard"]["G4"].value,"=Actual!B20-Plan!B20")
