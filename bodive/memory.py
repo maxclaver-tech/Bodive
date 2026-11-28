@@ -222,6 +222,23 @@ class Memory:
                 raise Refused("Draft could not be attached to the claim")
             self.audit(query, "claude_draft_saved", id=identifier)
 
+    def market_observation(self, identifier, kind, url, note, actor):
+        from .market import observation
+        if self.mode == "live" and not actor.startswith("telegram:"):
+            raise Refused("Live market observations require Telegram")
+        item = observation(kind, url, note)
+        with self.transaction() as query:
+            self.require_running(query)
+            if query("select id from opportunities where id=?", identifier).fetchone() is None:
+                raise Refused("Unknown dossier")
+            self.audit(query, "market_observation", dossier_id=identifier, observation=item, actor=actor)
+
+    def market_observations(self, identifier):
+        with self.transaction() as query:
+            return [detail["observation"] for row in query(
+                "select detail from events where name='market_observation' order by created_at")
+                    if (detail := json.loads(row["detail"])).get("dossier_id")==identifier]
+
     def pending_costs(self):
         with self.transaction() as query:
             return [dict(row) for row in query(

@@ -86,6 +86,30 @@ def on_message(memory, telegram, message):
         telegram.send("BODIVE · Presupuesto\n" + "\n".join(
             f"{label}: {report[key] / 100:.2f} EUR" for label, key in labels))
         return
+    if match := re.fullmatch(rf"/evidence ({ID}) (competitor|interest|purchase) (\S{{1,350}}) (.{1,300})", text):
+        memory.market_observation(*match.groups(), actor)
+        telegram.send("Observación aportada por operador guardada. No equivale a verificación independiente.")
+        return
+    if match := re.fullmatch(rf"/market ({ID})", text):
+        from .market import assessment
+        identifier = match[1]
+        data = assessment(memory.load(identifier), memory.market_observations(identifier),
+                          memory.product_report(identifier)["cost_cents"])
+        be = str(data["break_even"]) if data["break_even"] is not None else "no alcanzable"
+        telegram.send(f"BODIVE · Viabilidad comercial\n{data['topic']}\n"
+                      f"{data['verdict']}\n"
+                      f"Precio supuesto: {data['price']/100:.2f} EUR\n"
+                      f"Coste unitario supuesto: {data['unit_cost']/100:.2f} EUR\n"
+                      f"Margen supuesto: {data['margin']/100:.2f} EUR\n"
+                      f"Coste fijo mínimo estimado: {data['fixed_floor']/100:.2f} EUR\n"
+                      f"Punto de equilibrio mínimo: {be} ventas\n"
+                      "Escenarios (no previsiones): "+", ".join(f"{n} ventas: {v/100:.2f} EUR" for n,v in data["scenarios"].items())+
+                      f"\nSeñales GitHub: {data['repository_signals']} (no prueban demanda)\n"
+                      f"URLs aportadas últimos 30 días: {data['counts']}\n"
+                      "Faltan verificar demanda, precios, comisiones y costes comunes.")
+        for item in data["observations"]:
+            telegram.send(f"{item['kind']} · {item['url']}\n{item['note']}\nNo verificado")
+        return
     if text == "/pending":
         rows = memory.pending_costs()
         if not rows:
@@ -180,7 +204,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
