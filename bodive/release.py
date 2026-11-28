@@ -8,6 +8,25 @@ from . import budget_product
 from .memory import Refused
 
 SPANISH={
+"Annual savings rate":"Tasa de ahorro anual",
+"Annual spending ratio":"Proporción anual de gastos",
+"Months with positive net":"Meses con saldo positivo",
+"SAVINGS GOALS":"OBJETIVOS DE AHORRO",
+"Goal":"Objetivo",
+"Target":"Meta",
+"Saved":"Ahorrado",
+"Remaining":"Pendiente",
+"Progress":"Progreso",
+"ANNUAL EXPENSE BREAKDOWN":"DESGLOSE ANUAL DE GASTOS",
+"Planned":"Previsto",
+"Actual amount":"Importe real",
+"Difference":"Diferencia",
+"ILLUSTRATIVE EXAMPLE":"EJEMPLO FICTICIO",
+"Goals":"Objetivos",
+"Categories":"Categorías",
+"Track savings goals separately from cash flow.":"Registra objetivos de ahorro por separado del saldo neto.",
+"Compare annual spending by category.":"Compara gastos anuales por categoría.",
+"Fictional figures only; your input sheets remain blank.":"Cifras ficticias; las hojas de entrada permanecen vacías.",
 "PERSONAL BUDGET | Review prototype":"PRESUPUESTO PERSONAL | Prototipo de revisión",
 "Purpose":"Objetivo","Currency":"Moneda","1. Plan":"1. Planificar","2. Actual":"2. Registrar",
 "3. Review":"3. Revisar","4. Savings":"4. Ahorro","5. Variance":"5. Diferencia",
@@ -49,6 +68,7 @@ def workbook(data, language):
             dv.error="Introduce un número no negativo."
     # Keep internal sheet identifiers unchanged to preserve formula references.
     wb["Dashboard"]._charts[0].title="Saldo neto mensual real"
+    wb["Categories"]._charts[0].title="Gastos anuales por categoría"
     for ws in wb:
         for row in ws.iter_rows():
             for c in row:
