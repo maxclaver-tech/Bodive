@@ -4,6 +4,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.chart import BarChart, Reference
+from openpyxl.formatting.rule import CellIsRule
 from .memory import Refused
 
 MONTHS=("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
@@ -113,6 +114,70 @@ def create():
     chart.width=23
     chart.height=10
     dash.add_chart(chart,"A19")
+    # Keep original input and dashboard references stable.
+    dash["A37"]="Annual savings rate"
+    dash["B37"]='=IF(C16=0,"",F16/C16)'
+    dash["B37"].number_format="0.0%"
+    dash["A38"]="Annual spending ratio"
+    dash["B38"]='=IF(C16=0,"",E16/C16)'
+    dash["B38"].number_format="0.0%"
+    dash["A39"]="Months with positive net"
+    dash["B39"]='=COUNTIF(F4:F15,">0")'
+    for row in (37,38,39):
+        dash.cell(row,1).font=Font(bold=True,color="17354D")
+        dash.cell(row,1).alignment=Alignment(wrap_text=True)
+        dash.row_dimensions[row].height=32
+    dash.conditional_formatting.add("F4:G15",CellIsRule(operator="lessThan",formula=["0"],fill=PatternFill("solid",fgColor="FCE8E6")))
+    goals=wb.create_sheet("Goals")
+    heading(goals,"SAVINGS GOALS",5)
+    header(goals,3,("Goal","Target","Saved","Remaining","Progress"))
+    for col in "ABCDE":
+        goals.column_dimensions[col].width=23
+    for row in range(4,14):
+        for col in range(1,4):
+            goals.cell(row,col).fill=PatternFill("solid",fgColor="E8F3FF")
+        for col in (2,3,4):
+            goals.cell(row,col).number_format=MONEY
+        goals.cell(row,4,f'=IF(B{row}="","",MAX(0,B{row}-C{row}))')
+        goals.cell(row,5,f'=IF(OR(B{row}="",B{row}=0),"",C{row}/B{row})').number_format="0.0%"
+    dv=DataValidation(type="decimal",operator="between",formula1=0,formula2=100000000,allow_blank=True,showErrorMessage=True,errorStyle="stop")
+    goals.add_data_validation(dv)
+    dv.add("B4:C13")
+    goals.freeze_panes="B4"
+    categories=wb.create_sheet("Categories")
+    heading(categories,"ANNUAL EXPENSE BREAKDOWN",4)
+    header(categories,3,("Category","Planned","Actual amount","Difference"))
+    for col in "ABCD":
+        categories.column_dimensions[col].width=24
+    for row,label in enumerate(EXPENSE,4):
+        source=row+5
+        categories.cell(row,1,label)
+        for col,formula in enumerate((f"=Plan!N{source}",f"=Actual!N{source}",f"=C{row}-B{row}"),2):
+            categories.cell(row,col,formula).number_format=MONEY
+    chart2=BarChart()
+    chart2.title="Annual expenses by category"
+    chart2.add_data(Reference(categories,min_col=2,max_col=3,min_row=3,max_row=12),titles_from_data=True)
+    chart2.set_categories(Reference(categories,min_col=1,min_row=4,max_row=12))
+    chart2.width=22
+    chart2.height=12
+    categories.add_chart(chart2,"A15")
+    example=wb.create_sheet("Example")
+    heading(example,"ILLUSTRATIVE EXAMPLE",2)
+    header(example,3,("Category","Actual amount"))
+    example.column_dimensions["A"].width=32
+    example.column_dimensions["B"].width=24
+    for row,label,value in ((4,"Total income",2000),(5,"Total expenses",1500),(6,"Net cash","=B4-B5"),(7,"Savings rate",'=IF(B4=0,"",B6/B4)')):
+        example.cell(row,1,label)
+        example.cell(row,2,value).number_format="0.0%" if row==7 else MONEY
+    guide.cell(14,1,"Goals")
+    guide.cell(14,2,"Track savings goals separately from cash flow.")
+    guide.cell(15,1,"Categories")
+    guide.cell(15,2,"Compare annual spending by category.")
+    guide.cell(16,1,"Example")
+    guide.cell(16,2,"Fictional figures only; your input sheets remain blank.")
+    for row in range(14,17):
+        guide.cell(row,2).alignment=Alignment(wrap_text=True)
+        guide.row_dimensions[row].height=30
     out=BytesIO()
     wb.save(out)
     data=out.getvalue()
@@ -121,7 +186,7 @@ def create():
 
 def verify(data):
     wb=load_workbook(BytesIO(data),data_only=False)
-    if wb.sheetnames!=["Start here","Dashboard","Plan","Actual"] or wb._external_links:
+    if wb.sheetnames!=["Start here","Dashboard","Plan","Actual","Goals","Categories","Example"] or wb._external_links:
         raise Refused("Workbook structure failed")
     for name in ("Plan","Actual"):
         ws=wb[name]
@@ -158,6 +223,16 @@ def verify(data):
             raise Refused("Dashboard annual formula check failed")
     if len(dash._charts) != 1 or dash.freeze_panes != "B4":
         raise Refused("Dashboard usability check failed")
+
+    for row in range(4,14):
+        g=wb["Goals"]
+        if any(g.cell(row,col).value is not None for col in range(1,4)) or g.cell(row,4).value != f'=IF(B{row}="","",MAX(0,B{row}-C{row}))' or g.cell(row,5).value != f'=IF(OR(B{row}="",B{row}=0),"",C{row}/B{row})':
+            raise Refused("Goals check failed")
+    for row in range(4,13):
+        if [wb["Categories"].cell(row,col).value for col in (2,3,4)] != [f"=Plan!N{row+5}",f"=Actual!N{row+5}",f"=C{row}-B{row}"]:
+            raise Refused("Category formula check failed")
+    if len(wb["Categories"]._charts)!=1 or wb["Example"]["B6"].value!="=B4-B5":
+        raise Refused("Example or chart check failed")
 
 def from_validation(memory,identifier):
     memory.check_running()
