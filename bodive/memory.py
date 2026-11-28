@@ -426,6 +426,36 @@ class Memory:
                 query("update approvals set blocked=1 where status='claimed'")
                 self.audit(query, "emergency_stop", actor=actor, reason="budget_exceeded")
 
+    def record_product_receipt(self, identifier, gross, deductions, reference, actor):
+        if self.mode=="live" and not actor.startswith("telegram:"):
+            raise Refused("Live accounting requires Telegram")
+        if (type(gross) is not int or type(deductions) is not int
+                or not 1<=gross<=100000000 or not 0<=deductions<=gross
+                or not re.fullmatch(r"[A-Za-z0-9._-]{1,100}",reference)):
+            raise Refused("Recibo o importes incorrectos")
+        reference="sale:"+reference
+        with self.transaction() as query:
+            if query("select id from opportunities where id=?",identifier).fetchone() is None:
+                raise Refused("Unknown dossier")
+            # Net receipts are income, not spending authorizations. Deductions are
+            # already withheld; never count them again as cash expenses.
+            self.ledger_entry(query,reference,"income",gross-deductions,None)
+            self.audit(query,"product_receipt",dossier_id=identifier,reference=reference,
+                       gross=gross,deductions=deductions,net=gross-deductions,actor=actor)
+
+    def product_receipts(self, identifier):
+        with self.transaction() as query:
+            if query("select id from opportunities where id=?",identifier).fetchone() is None:
+                raise Refused("Unknown dossier")
+            totals={"gross":0,"deductions":0,"net":0,"receipts":0}
+            for row in query("select detail from events where name='product_receipt'"):
+                item=json.loads(row["detail"])
+                if item["dossier_id"]==identifier:
+                    for key in ("gross","deductions","net"):
+                        totals[key]+=item[key]
+                    totals["receipts"]+=1
+            return totals
+
     def product_report(self, identifier):
         with self.transaction() as query:
             row = query("select dossier from opportunities where id=?", identifier).fetchone()
