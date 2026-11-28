@@ -147,7 +147,7 @@ class SQLiteTests(MemoryContract, unittest.TestCase):
                                                "full_name": "test/repo", "stargazers_count": 123,
                                                "updated_at": "2026-11-01T00:00:00Z"}],
                                      "incomplete_results": False}
-        for _ in range(12):
+        for _ in range(30):
             identifier = director.plan(self.memory, "onboarding", 1200, 400, 800, GitHubResearch(http))
         with self.assertRaises(Refused):
             director.plan(self.memory, "onboarding", 1200, 400, 800, GitHubResearch(http))

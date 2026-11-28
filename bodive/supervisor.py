@@ -78,6 +78,13 @@ def on_message(memory, telegram, message):
         memory.stop(actor)
         telegram.send("BODIVE stopped. Pending and approved operations were cancelled.")
         return
+    if text == "/quota":
+        labels = {"market":"Mercado manual","catalog":"Catálogos","daily":"Investigación autónoma"}
+        status = memory.research_status()
+        telegram.send("BODIVE · Consultas externas (día UTC)\n"+"\n".join(
+            f"{labels[k]}: {v['used']}/{v['limit']} · disponibles: {v['remaining']}"
+            for k,v in status.items())+"\nClaude: límite independiente de 3 generaciones/día y 20 totales.")
+        return
     if text == "/budget":
         report = memory.report()
         labels = (("Presupuesto inicial", "budget_cents"), ("Ingresos", "income_cents"),
@@ -143,7 +150,7 @@ def on_message(memory, telegram, message):
         if action == "competitors":
             if memory.mode != "live":
                 raise Refused("La búsqueda externa requiere modo live")
-            memory.research_slot()
+            memory.research_slot("catalog")
             snapshot = catalog(telegram.http, topic or dossier["evidence"]["topic"], source)
             memory.record_competition(identifier,snapshot)
         else:
@@ -303,7 +310,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
