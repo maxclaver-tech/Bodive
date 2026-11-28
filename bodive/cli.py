@@ -41,6 +41,10 @@ def parser():
         artifact.add_argument("file")
         if name == "artifact-handoff":
             artifact.add_argument("approval")
+    campaign = commands.add_parser("campaign-preview")
+    campaign.add_argument("id")
+    campaign.add_argument("language", choices=("es", "en"))
+    campaign.add_argument("start")
     commands.add_parser("reconcile-preview").add_argument("file")
     chapter = commands.add_parser("propose-chapter")
     chapter.add_argument("id")
@@ -113,6 +117,9 @@ def proposal(args, memory):
 def execute(args, memory, http):
     command = args.command
     live = memory.mode == "live"
+    if command == "campaign-preview":
+        from .marketing import campaign
+        return campaign(memory, args.id, args.language, args.start)
     if command == "reconcile-preview":
         from .reconciliation import preview
         with open(args.file, "rb") as stream:
