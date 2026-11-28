@@ -196,6 +196,12 @@ def on_message(memory, telegram, message):
             telegram.send(f"{item['title']}\n{item['url']}\n"
                           f"Puntos: {item['points']} · Comentarios: {item['comments']}\n{item['published_at']}")
         return
+    if match := re.fullmatch(rf"/decision ({ID})(?: ([0-9]{{1,7}}) ([0-9]{{1,7}}) ([0-9]{{1,5}}))?", text):
+        from . import decision
+        identifier, price, unit, fixed = match.groups()
+        values = [int(x) if x is not None else None for x in (price,unit,fixed)]
+        telegram.send(decision.report(decision.analyze(memory,identifier,*values)))
+        return
     if match := re.fullmatch(rf"/market ({ID})", text):
         from .market import assessment
         identifier = match[1]
@@ -310,7 +316,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
