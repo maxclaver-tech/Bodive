@@ -88,6 +88,31 @@ def on_message(memory, telegram, message):
         memory.stop(actor)
         telegram.send("BODIVE stopped. Pending and approved operations were cancelled.")
         return
+    if text in {"/store", "/storeproducts", "/storesales"}:
+        from .store import Store
+        if memory.mode!="live":
+            raise Refused("Gumroad requiere modo live")
+        client=Store(telegram.http)
+        memory.store_query_slot()
+        if text=="/storesales":
+            data=client.sales()
+            telegram.send(f"BODIVE · Gumroad ventas (primera página)\nDesde: {data['after']}\n"
+                          f"Registros recibidos: {data['returned']}\n"
+                          f"Sin marca de prueba/reembolso/disputa: {data['counts'].get('other',0)}\n"
+                          f"Prueba: {data['counts'].get('test',0)}\n"
+                          f"Reembolso o disputa: {data['counts'].get('refund_or_dispute',0)}\n"
+                          f"Omitidos: {data['skipped']}\n"
+                          f"Muestra limitada: {'sí' if data['limited'] else 'no indicada'}\n"
+                          "No equivale a cobros ni ingresos netos. No se modifica la contabilidad.")
+        else:
+            data=client.products()
+            telegram.send(f"BODIVE · Gumroad conexión correcta\nProductos recibidos: {data['returned']}\n"
+                          f"Muestra limitada: {'sí' if data['limited'] else 'no indicada'}")
+            if text=="/storeproducts":
+                for row in data["rows"]:
+                    state={True:"publicado",False:"no publicado",None:"desconocido"}[row["published"]]
+                    telegram.send(f"{row['name']}\nEstado: {state}\nID Gumroad: {row['id']}")
+        return
     if text == "/quota":
         labels = {"market":"Mercado manual","catalog":"Catálogos","daily":"Investigación autónoma"}
         status = memory.research_status()
@@ -393,7 +418,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /release PROPUESTA es|en, /sales DOSIER, /receipt DOSIER BRUTO DEDUCCIONES RECIBO CONFIRMO, /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /store, /storeproducts, /storesales, /release PROPUESTA es|en, /sales DOSIER, /receipt DOSIER BRUTO DEDUCCIONES RECIBO CONFIRMO, /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
