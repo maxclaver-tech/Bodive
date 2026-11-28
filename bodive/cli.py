@@ -45,6 +45,19 @@ def parser():
     campaign.add_argument("id")
     campaign.add_argument("language", choices=("es", "en"))
     campaign.add_argument("start")
+    commands.add_parser("operations")
+    pricing = commands.add_parser("pricing-preview")
+    pricing.add_argument("prices", nargs="+", type=int)
+    for name in ("units", "fee-bps", "fixed-cents", "unit-cost-cents"):
+        pricing.add_argument("--"+name, required=True, type=int)
+    queue = commands.add_parser("queue-add")
+    queue.add_argument("identifier")
+    queue.add_argument("kind")
+    queue.add_argument("priority", type=int)
+    commands.add_parser("queue-claim")
+    resolve = commands.add_parser("queue-resolve")
+    resolve.add_argument("identifier")
+    resolve.add_argument("outcome", choices=("completed", "failed", "cancelled"))
     commands.add_parser("performance")
     commands.add_parser("market-preview").add_argument("file")
     catalog = commands.add_parser("catalog-preview")
@@ -125,6 +138,20 @@ def execute(args, memory, http):
     if command == "campaign-preview":
         from .marketing import campaign
         return campaign(memory, args.id, args.language, args.start)
+    if command == "operations":
+        from .operations import snapshot
+        return snapshot(memory)
+    if command == "pricing-preview":
+        from .optimization import scenarios
+        memory.check_running()
+        return scenarios(args.prices, args.units, args.fee_bps, args.fixed_cents, args.unit_cost_cents)
+    if command in {"queue-add", "queue-claim", "queue-resolve"}:
+        from . import local_queue
+        if command == "queue-add":
+            return local_queue.enqueue(memory, args.identifier, args.kind, args.priority)
+        if command == "queue-claim":
+            return local_queue.claim(memory)
+        return local_queue.resolve(memory, args.identifier, args.outcome)
     if command == "performance":
         from .performance import report
         return report(memory)
