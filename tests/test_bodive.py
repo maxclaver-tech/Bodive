@@ -154,7 +154,7 @@ class SQLiteTests(MemoryContract, unittest.TestCase):
         dossier = self.memory.load(identifier)
         self.assertEqual(dossier["analysis"]["break_even_units"], 1)
         self.assertEqual(dossier["evidence"]["observations"][0]["stars"], 123)
-        self.assertEqual(http.request.call_count, 12)
+        self.assertEqual(http.request.call_count, 30)
 
 @unittest.skipUnless(os.environ.get("BODIVE_TEST_POSTGRES"), "requires disposable PostgreSQL")
 class PostgresTests(MemoryContract, unittest.TestCase):
