@@ -22,3 +22,18 @@ class ProductQualityTests(unittest.TestCase):
                 wb.save(out)
                 with self.assertRaises(Refused):
                     verify(out.getvalue())
+
+
+    def test_localized_outputs(self):
+        from bodive.release import workbook, cover
+        from PIL import Image
+        for language in ("en", "es"):
+            data = workbook(create(), language)
+            verify(data)
+            wb = load_workbook(BytesIO(data))
+            self.assertEqual(wb["Plan"]["A4"].value, "Salario" if language == "es" else "Salary")
+            with Image.open(BytesIO(cover(language))) as im:
+                self.assertEqual(im.size, (1200, 675))
+                self.assertEqual(im.format, "PNG")
+        with self.assertRaises(Refused):
+            cover("xx")
