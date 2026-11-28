@@ -7,7 +7,7 @@ name = "bodive"
 version = "0.1.0"
 description = "Supervised digital product operations"
 requires-python = ">=3.12,<3.13"
-dependencies = ["reportlab==4.4.10"]
+dependencies = ["reportlab==4.4.10", "openpyxl==3.1.5"]
 
 [project.optional-dependencies]
 cloud = ["psycopg[binary]==3.3.3"]

@@ -206,6 +206,38 @@ def on_message(memory, telegram, message):
             telegram.send(f"{item['title']}\n{item['url']}\n"
                           f"Puntos: {item['points']} · Comentarios: {item['comments']}\n{item['published_at']}")
         return
+    if text == "/portfolio":
+        rows=memory.portfolio()
+        if not rows:
+            telegram.send("Sin dosieres guardados.")
+        for row in rows:
+            telegram.send(f"{row['topic']}\n/decision {row['id']}\n/proposal {row['id']}")
+        return
+    if match := re.fullmatch(rf"/launchkit ({ID})",text):
+        from . import launch
+        data=launch.prepare(memory,match[1])
+        telegram.document(data,"bodive-launch-review.zip")
+        telegram.send("Paquete privado: Excel, descripción, checklist y marketing en borrador. No publicar el ZIP. No autoriza gasto ni lanzamiento.")
+        return
+    if match := re.fullmatch(rf"/feedback ({ID}) ([0-9]{{1,3}}) ([0-9]{{1,3}}) (.{1,300})",text):
+        from . import launch
+        identifier,total,interested,note=match.groups()
+        launch.record_feedback(memory,identifier,int(total),int(interested),note,actor)
+        telegram.send("Resumen declarado por operador guardado; no son ventas verificadas. No se autoriza inversión.")
+        return
+    if match := re.fullmatch(rf"/feedback ({ID})",text):
+        data=memory.validation_feedback(match[1])
+        if not data:
+            telegram.send("Sin resumen de validación registrado.")
+        else:
+            telegram.send(f"Último resumen declarado: {data['interested']} de {data['participants']} expresaron interés de pago.\n{data['note']}\nNo equivale a compras; no se suman informes.")
+        return
+    if match := re.fullmatch(rf"/prototype ({ID})",text):
+        from .budget_product import from_validation
+        data=from_validation(memory,match[1])
+        telegram.document(data,"bodive-budget-review.xlsx")
+        telegram.send("Prototipo Excel privado. Fórmulas y estructura revisadas; comprobar cálculo y usabilidad en Excel antes de vender. Sin Claude ni publicación.")
+        return
     if match := re.fullmatch(rf"/(proposal|validation) ({ID})",text):
         from . import validation
         action, identifier = match.groups()
@@ -339,7 +371,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 

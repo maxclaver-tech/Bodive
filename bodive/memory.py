@@ -333,6 +333,29 @@ class Memory:
             self.audit(query,"validation_decided",proposal_id=identifier,
                        verdict="accepted" if approve else "rejected",actor=actor)
 
+    def record_validation_feedback(self, identifier, participants, interested, note, actor):
+        with self.transaction() as query:
+            self.require_running(query)
+            row=self._validation(query,identifier)
+            if row["status"]!="accepted":
+                raise Refused("Se requiere plan aceptado")
+            self.audit(query,"validation_feedback",proposal_id=identifier,participants=participants,
+                       interested=interested,note=note,actor=actor)
+
+    def validation_feedback(self, identifier):
+        with self.transaction() as query:
+            self._validation(query,identifier)
+            for row in query("select detail from events where name='validation_feedback' order by created_at desc"):
+                detail=json.loads(row["detail"])
+                if detail["proposal_id"]==identifier:
+                    return detail
+        return None
+
+    def portfolio(self):
+        with self.transaction() as query:
+            return [{"id":row["id"],"topic":json.loads(row["dossier"])["evidence"]["topic"]}
+                    for row in query("select id,dossier from opportunities order by created_at desc limit 20")]
+
     def record_competition(self, identifier, result):
         with self.transaction() as query:
             self.require_running(query)
