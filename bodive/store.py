@@ -69,3 +69,36 @@ class Store:
         return {"after":after,"returned":len(data["sales"]),"counts":dict(counts),
                 "price_minor_units":dict(amounts),"skipped":skipped,
                 "limited":len(data["sales"])>100 or bool(data.get("next_page_url") or data.get("next_page_key"))}
+
+
+    def reconciliation(self):
+        from .reconciliation import preview
+        from hashlib import sha256
+        after = (now()-timedelta(days=30)).date().isoformat()
+        data = self.get("sales", {"after": after})
+        events = []
+        omitted = 0
+        for item in data["sales"][:100]:
+            if not isinstance(item, dict):
+                omitted += 1
+                continue
+            identifier, currency, price = item.get("id"), item.get("currency"), item.get("price")
+            if (not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_=-]{1,120}", identifier)
+                    or not isinstance(currency, str) or not re.fullmatch("[A-Z]{3}", currency.upper())
+                    or type(price) is not int or not 0 <= price <= 100000000
+                    or any(item.get(flag) is not False for flag in ("refunded", "disputed", "chargebacked"))
+                    or not (item.get("test") is False or item.get("is_test") is False)
+                    or item.get("test") is True or item.get("is_test") is True):
+                omitted += 1
+                continue
+            key = sha256(identifier.encode()).hexdigest()
+            events.append(dict(id=key, sale_id=key, currency=currency.upper(), kind="sale",
+                               amount_minor=price, evidence="gumroad:sales:"+key))
+        result = preview(events)
+        # Gross observations only: absent deductions are unknown, not zero.
+        for amounts in result["currencies"].values():
+            amounts.update(fee=None, refund=None, net=None)
+        result.update(after=after, omitted=omitted, returned=len(data["sales"]),
+                      limited=len(data["sales"])>100 or bool(data.get("next_page_url") or data.get("next_page_key")),
+                      deductions_complete=False)
+        return result
