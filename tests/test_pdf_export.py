@@ -35,3 +35,15 @@ class PDFTests(unittest.TestCase):
         self.assertIn(b"%PDF-test", args[2])
         with self.assertRaises(Refused):
             telegram.document(b"not pdf", "bodive-review.pdf")
+
+    def test_inline_escapes_untrusted_markup(self):
+        self.assertEqual(pdf_export.inline("**Bold** <img src='file:///secret'/>"),
+                         "<b>Bold</b> &lt;img src='file:///secret'/&gt;")
+
+    def test_workbook_table_and_writing_lines(self):
+        source = "# Exercise\n**Goals**\n\n| Goal | Criterion |\n|---|---|\n"
+        source += "| Scope | " + "Long example. "*45 + "|\n"
+        source += "| Timing | Confirm milestones |\n\n**Goal 1:** ______________________\n"
+        pdf = pdf_export.render(source, "Freelancer workbook")
+        self.assertTrue(pdf.startswith(b"%PDF-"))
+        self.assertIn(b"%%EOF", pdf)
