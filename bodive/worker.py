@@ -2,7 +2,7 @@
 import signal
 import threading
 import logging
-from . import supervisor
+from . import supervisor, daily
 from .diagnostics import category
 
 
@@ -17,9 +17,16 @@ def serve(memory, telegram):
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
     logger.info("BODIVE worker started")
+    next_check = 0
+    import time
     while not stop.is_set():
         try:
             acquired = supervisor.poll(memory, telegram)
+            if acquired and not stop.is_set() and time.monotonic() >= next_check:
+                next_check = time.monotonic() + 60
+                with memory.poll_lock() as daily_lock:
+                    if daily_lock:
+                        daily.run(memory, telegram)
             # Back off if a GitHub poll or another worker is active.
             stop.wait(1 if acquired else 5)
         except Exception as exc:
