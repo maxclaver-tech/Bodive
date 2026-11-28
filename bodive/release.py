@@ -49,6 +49,11 @@ def workbook(data, language):
             dv.error="Introduce un número no negativo."
     # Keep internal sheet identifiers unchanged to preserve formula references.
     wb["Dashboard"]._charts[0].title="Saldo neto mensual real"
+    for ws in wb:
+        for row in ws.iter_rows():
+            for c in row:
+                if c.data_type == "s" and c.value in SPANISH and SPANISH[c.value] != c.value:
+                    raise Refused("Incomplete localization")
     out=BytesIO()
     wb.save(out)
     result=out.getvalue()
@@ -56,6 +61,8 @@ def workbook(data, language):
     return result
 
 def cover(language):
+    if language not in {"en", "es"}:
+        raise Refused("Idioma no disponible")
     # Local Pillow rendering; no network, external assets or fonts downloaded.
     im=Image.new("RGB",(1200,675),"#17354d")
     d=ImageDraw.Draw(im)
@@ -63,7 +70,10 @@ def cover(language):
     font=lambda size:ImageFont.load_default(size=size)
     title="PRESUPUESTO PERSONAL" if language=="es" else "PERSONAL BUDGET"
     sub="Planifica, registra y compara" if language=="es" else "Plan, track and compare"
-    d.text((70,88),title,font=font(54),fill="white")
+    title_font=font(54)
+    while d.textbbox((0,0),title,font=title_font)[2]>1060:
+        title_font=font(title_font.size-2)
+    d.text((70,88),title,font=title_font,fill="white")
     d.text((73,170),sub,font=font(32),fill="#c9e6e5")
     labels=("INGRESOS","GASTOS","SALDO") if language=="es" else ("INCOME","EXPENSES","NET CASH")
     for i,label in enumerate(labels):
@@ -88,6 +98,11 @@ def package(memory,identifier,language):
     checklist="PRIVATE REVIEW / REVISION PRIVADA\nTest Excel recalculation: 2000 income, 1500 expenses, 500 net, 25% savings. Test zero income, negative net and annual totals. Verify buyer feedback, fees and rights. Separate approval required before publication. Do not upload this ZIP."
     files={"budget-review.xlsx":data,"cover-review.png":cover(language),"listing-draft.md":listing.encode(),
            "marketing-draft.md":marketing.encode(),"release-checklist.txt":checklist.encode()}
+    quality = ("PRIVATE QUALITY REVIEW / REVISION PRIVADA\n"
+               "Structural formulas and input controls checked.\n"
+               "Spreadsheet recalculation and visual inspection in Excel still required.\n"
+               "No publication approval, verified demand or sales claim.\n")
+    files["quality-review.txt"] = quality.encode()
     files["SHA256SUMS.txt"]="".join(f"{sha256(v).hexdigest()}  {k}\n" for k,v in files.items()).encode()
     out=BytesIO()
     with ZipFile(out,"w",ZIP_DEFLATED) as z:
