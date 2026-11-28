@@ -293,6 +293,46 @@ class Memory:
                     return detail
         return None
 
+    def propose_validation(self, payload):
+        identifier = uuid4().hex
+        digest = hashlib.sha256(canonical([identifier,payload]).encode()).hexdigest()
+        with self.transaction() as query:
+            self.require_running(query)
+            self.audit(query,"validation_proposed",proposal_id=identifier,digest=digest,payload=payload,
+                       expires_at=(now()+timedelta(hours=24)).isoformat())
+        return identifier
+
+    def _validation(self, query, identifier):
+        proposal = None
+        verdict = None
+        for row in query("select name,detail from events where name in "
+                         "('validation_proposed','validation_decided') order by created_at"):
+            detail = json.loads(row["detail"])
+            if detail.get("proposal_id") != identifier:
+                continue
+            if row["name"]=="validation_proposed":
+                proposal=detail
+            else:
+                verdict=detail["verdict"]
+        if proposal is None:
+            raise Refused("Propuesta de validación desconocida")
+        return {**proposal,"status":verdict or ("expired" if proposal["expires_at"]<=now().isoformat() else "pending")}
+
+    def validation(self, identifier):
+        with self.transaction() as query:
+            return self._validation(query,identifier)
+
+    def decide_validation(self, identifier, digest, approve, actor):
+        if self.mode=="live" and not actor.startswith("telegram:"):
+            raise Refused("Live decisions require Telegram")
+        with self.transaction() as query:
+            self.require_running(query)
+            row=self._validation(query,identifier)
+            if row["status"]!="pending" or row["digest"]!=digest:
+                raise Refused("Propuesta caducada, decidida o incorrecta")
+            self.audit(query,"validation_decided",proposal_id=identifier,
+                       verdict="accepted" if approve else "rejected",actor=actor)
+
     def record_competition(self, identifier, result):
         with self.transaction() as query:
             self.require_running(query)
