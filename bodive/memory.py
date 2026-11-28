@@ -222,6 +222,21 @@ class Memory:
                 raise Refused("Draft could not be attached to the claim")
             self.audit(query, "claude_draft_saved", id=identifier)
 
+    def record_discovery(self, snapshot):
+        identifier = uuid4().hex
+        with self.transaction() as query:
+            self.require_running(query)
+            self.audit(query, "discovery_snapshot", discovery_id=identifier, snapshot=snapshot)
+        return identifier
+
+    def get_discovery(self, identifier=None):
+        with self.transaction() as query:
+            for row in query("select detail from events where name='discovery_snapshot' order by created_at desc"):
+                detail = json.loads(row["detail"])
+                if identifier is None or detail.get("discovery_id")==identifier:
+                    return detail
+        return None
+
     def record_community(self, identifier, result):
         with self.transaction() as query:
             self.require_running(query)

@@ -90,6 +90,43 @@ def on_message(memory, telegram, message):
         memory.market_observation(*match.groups(), actor)
         telegram.send("Observación aportada por operador guardada. No equivale a verificación independiente.")
         return
+    if text in {"/discover", "/opportunities"}:
+        from . import discovery
+        if text == "/discover":
+            if memory.mode != "live":
+                raise Refused("La búsqueda externa requiere modo live")
+            telegram.send("Investigando cuatro categorías. No se realizará ninguna inversión.")
+            snapshot = discovery.discover(memory, telegram.http)
+            identifier = memory.record_discovery(snapshot)
+        else:
+            detail = memory.get_discovery()
+            if detail is None:
+                telegram.send("Sin oportunidades guardadas. Usa /discover.")
+                return
+            identifier, snapshot = detail["discovery_id"],detail["snapshot"]
+        telegram.send(f"BODIVE · Candidatos comerciales\n{snapshot['collected_at']}\n"
+                      f"{snapshot['interpretation']}\nFuente: {snapshot['source']}")
+        for n,row in enumerate(snapshot["candidates"],1):
+            if row["status"]!="sampled":
+                telegram.send(f"{n}. {row['product']} · fuente no disponible")
+                continue
+            links = "\n".join(f"{h['title']}\n{h['url']}" for h in row["signals"][:2])
+            telegram.send(f"{n}. {row['product']}\n"
+                          f"Publicaciones de muestra: {row['discussion_count']} · comentarios: {row['comment_count']}\n"
+                          f"{links}\n/shortlist {identifier} {n}")
+        return
+    if match := re.fullmatch(rf"/shortlist ({ID}) ([1-4])", text):
+        from . import discovery, director
+        detail = memory.get_discovery(match[1])
+        row = discovery.candidate(detail["snapshot"] if detail else None, int(match[2]))
+        # Creates a local research dossier only. No extra network requests or spending.
+        identifier = director.plan(memory, row["product"], 1200, 400, 0, None)
+        memory.record_community(identifier, {"source":detail["snapshot"]["source"],
+            "query":row["topic"],"collected_at":detail["snapshot"]["collected_at"],
+            "observations":row["signals"],"interpretation":detail["snapshot"]["interpretation"]})
+        telegram.send(f"Dosier de revisión: {identifier}\n/market {identifier}\n/signals {identifier}\n"
+                      "Precio y costes iniciales hipotéticos; demanda no validada.")
+        return
     if match := re.fullmatch(rf"/(scan|signals) ({ID})", text):
         from .community import search
         action, identifier = match.groups()
@@ -227,7 +264,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
