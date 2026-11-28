@@ -97,6 +97,7 @@ class Memory:
             query("update approvals set status='cancelled' where status in ('pending','approved')")
             query("update approvals set blocked=1 where status='claimed'")
             self.audit(query, "emergency_stop", actor=actor)
+            self.audit(query, "daily_discovery_setting", enabled=False)
 
     def resume(self):
         with self.transaction() as query:
@@ -221,6 +222,41 @@ class Memory:
             if count != 1:
                 raise Refused("Draft could not be attached to the claim")
             self.audit(query, "claude_draft_saved", id=identifier)
+
+    def daily_setting(self, enabled):
+        with self.transaction() as query:
+            if enabled:
+                self.require_running(query)
+            self.audit(query, "daily_discovery_setting", enabled=bool(enabled))
+
+    def daily_status(self):
+        with self.transaction() as query:
+            setting = query("select detail from events where name='daily_discovery_setting' "
+                            "order by created_at desc limit 1").fetchone()
+            last = query("select created_at from events where name='daily_discovery_started' "
+                         "order by created_at desc limit 1").fetchone()
+            return {"enabled":bool(setting and json.loads(setting["detail"])["enabled"]),
+                    "last_attempt":last["created_at"] if last else None}
+
+    def claim_daily_discovery(self):
+        with self.transaction() as query:
+            if query("select stopped from control where id=1").fetchone()["stopped"]:
+                return False
+            setting = query("select detail from events where name='daily_discovery_setting' "
+                            "order by created_at desc limit 1").fetchone()
+            if not setting or not json.loads(setting["detail"])["enabled"]:
+                return False
+            cutoff = (now()-timedelta(hours=24)).isoformat()
+            if query("select id from events where name='daily_discovery_started' and created_at>? "
+                     "limit 1", cutoff).fetchone():
+                return False
+            # Reserve the attempt before network I/O; no retry after a crash.
+            self.audit(query, "daily_discovery_started")
+            return True
+
+    def daily_outcome(self, status, identifier=None):
+        with self.transaction() as query:
+            self.audit(query, "daily_discovery_outcome", status=status, discovery_id=identifier)
 
     def record_discovery(self, snapshot):
         identifier = uuid4().hex

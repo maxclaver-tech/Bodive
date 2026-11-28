@@ -90,6 +90,15 @@ def on_message(memory, telegram, message):
         memory.market_observation(*match.groups(), actor)
         telegram.send("Observación aportada por operador guardada. No equivale a verificación independiente.")
         return
+    if text in {"/daily on", "/daily off", "/daily"}:
+        if text != "/daily":
+            memory.daily_setting(text.endswith(" on"))
+        status = memory.daily_status()
+        state = "activa" if status["enabled"] else "desactivada"
+        telegram.send(f"Investigación cada 24 horas: {state}.\n"
+                      f"Último intento UTC: {status['last_attempt'] or 'ninguno'}\n"
+                      "Sin Claude ni inversiones. /daily on · /daily off")
+        return
     if text in {"/discover", "/opportunities"}:
         from . import discovery
         if text == "/discover":
@@ -264,7 +273,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
