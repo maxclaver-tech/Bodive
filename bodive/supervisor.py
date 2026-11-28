@@ -247,6 +247,13 @@ def on_message(memory, telegram, message):
             telegram.send(f"{item['title']}\n{item['url']}\n"
                           f"Puntos: {item['points']} · Comentarios: {item['comments']}\n{item['published_at']}")
         return
+    if match := re.fullmatch(rf"/buyerpackage ({ID})",text):
+        from .buyer_package import build
+        from hashlib import sha256
+        data = build(memory, match[1])
+        telegram.send("Candidato privado. No autorizado para publicar. SHA256: "+sha256(data).hexdigest())
+        telegram.document(data,"bodive-buyer-candidate.zip")
+        return
     if match := re.fullmatch(rf"/release ({ID}) (es|en)",text):
         from . import release
         telegram.document(release.package(memory,*match.groups()),"bodive-release-review.zip")
@@ -434,7 +441,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /operations, /storereconcile, /store, /storeproducts, /storesales, /release PROPUESTA es|en, /sales DOSIER, /receipt DOSIER BRUTO DEDUCCIONES RECIBO CONFIRMO, /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /buyerpackage PROPUESTA, /operations, /storereconcile, /store, /storeproducts, /storesales, /release PROPUESTA es|en, /sales DOSIER, /receipt DOSIER BRUTO DEDUCCIONES RECIBO CONFIRMO, /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
