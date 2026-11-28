@@ -214,7 +214,7 @@ class Memory:
                         identifier, timestamp.isoformat()).fetchone()
             if row is None or row["kind"] not in kinds:
                 raise Refused("Operation lacks a current approval of the required type")
-            if row["kind"] == "publish" and json.loads(row["payload"]).get("purpose") == "manual_publication_review":
+            if row["kind"] == "publish" and (self.mode == "live" or json.loads(row["payload"]).get("purpose") == "manual_publication_review"):
                 raise Refused("Use artifact-handoff with the exact reviewed file")
             if row["kind"] == "claude":
                 since = timestamp.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
