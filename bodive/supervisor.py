@@ -88,6 +88,17 @@ def on_message(memory, telegram, message):
         memory.stop(actor)
         telegram.send("BODIVE stopped. Pending and approved operations were cancelled.")
         return
+    if text == "/storereconcile":
+        from .store import Store
+        if memory.mode != "live":
+            raise Refused("Gumroad requiere modo live")
+        client = Store(telegram.http)
+        memory.store_query_slot()
+        result = client.reconciliation()
+        summary = {k: result[k] for k in ("after", "returned", "omitted", "limited", "currencies", "deductions_complete", "booked")}
+        summary["conflicts"] = len(result["conflicting_ids"])
+        telegram.send("BODIVE · Conciliación provisional (no contabilizada)\n" + json.dumps(summary, ensure_ascii=False))
+        return
     if text in {"/store", "/storeproducts", "/storesales"}:
         from .store import Store
         if memory.mode!="live":
@@ -418,7 +429,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /store, /storeproducts, /storesales, /release PROPUESTA es|en, /sales DOSIER, /receipt DOSIER BRUTO DEDUCCIONES RECIBO CONFIRMO, /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /storereconcile, /store, /storeproducts, /storesales, /release PROPUESTA es|en, /sales DOSIER, /receipt DOSIER BRUTO DEDUCCIONES RECIBO CONFIRMO, /portfolio, /launchkit PROPUESTA, /feedback PROPUESTA [TOTAL INTERESADOS NOTA], /prototype PROPUESTA, /proposal DOSIER, /validation PROPUESTA, /decision DOSIER [PRECIO COSTE_UNITARIO FIJO en céntimos], /quota, /competitors DOSIER books|etsy [TEMA], /prices DOSIER books|etsy, /daily, /daily on, /daily off, /discover, /opportunities, /shortlist BUSQUEDA N, /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
