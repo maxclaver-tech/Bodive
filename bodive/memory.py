@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 BUDGET_CENTS = 10_000
+RESEARCH_LIMITS = {"market": 30, "catalog": 20, "daily": 4}
 MANUAL_KINDS = {"publish", "advertise", "expense"}
 
 
@@ -104,15 +105,34 @@ class Memory:
             query("update control set stopped=0 where id=1")
             self.audit(query, "resume", actor="operator")
 
-    def research_slot(self):
+    def _research_counts(self, query):
+        since = now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        counts = dict.fromkeys(RESEARCH_LIMITS, 0)
+        for row in query("select detail from events where name='research_started' and created_at>=?", since):
+            # Legacy events were undifferentiated; preserve them against market quota.
+            kind = json.loads(row["detail"]).get("category", "market")
+            if kind not in counts:
+                kind = "market"
+            counts[kind] += 1
+        return counts
+
+    def research_status(self):
+        with self.transaction() as query:
+            counts = self._research_counts(query)
+            return {kind: {"used":counts[kind], "limit":limit,
+                           "remaining":max(0,limit-counts[kind])}
+                    for kind,limit in RESEARCH_LIMITS.items()}
+
+    def research_slot(self, category="market", count=1):
+        if category not in RESEARCH_LIMITS or type(count) is not int or not 1<=count<=4:
+            raise Refused("Categoría o número de consultas no válido")
         with self.transaction() as query:
             self.require_running(query)
-            since = now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-            count = query("select count(*) as total from events where name='research_started' "
-                          "and created_at>=?", since).fetchone()["total"]
-            if count >= 12:
-                raise Refused("Research quota reached for the UTC day")
-            self.audit(query, "research_started")
+            counts = self._research_counts(query)
+            if counts[category]+count > RESEARCH_LIMITS[category]:
+                raise Refused(f"Cuota diaria UTC agotada: {category} ({counts[category]}/{RESEARCH_LIMITS[category]}). /quota")
+            for _ in range(count):
+                self.audit(query, "research_started", category=category)
 
     def operation_failed(self, identifier, error_type):
         with self.transaction() as query:

@@ -23,7 +23,7 @@ def run(memory, telegram):
     identifier = None
     try:
         prior = memory.get_discovery()
-        snapshot = discovery.discover(memory, telegram.http)
+        snapshot = discovery.discover(memory, telegram.http, category="daily")
         identifier = memory.record_discovery(snapshot)
         candidates = changes(prior["snapshot"] if prior else None,snapshot)
         memory.check_running()

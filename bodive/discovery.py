@@ -10,11 +10,12 @@ CANDIDATES = (
 )
 
 
-def discover(memory, http):
+def discover(memory, http, category="market"):
     rows = []
+    # Reserve the complete batch atomically; avoid half-finished searches at quota limit.
+    memory.research_slot(category, len(CANDIDATES))
     for topic, product in CANDIDATES:
-        # Never swallow a budget/stop/quota refusal.
-        memory.research_slot()
+        memory.check_running()
         try:
             snapshot = community.search(http, topic)
         except Refused:
