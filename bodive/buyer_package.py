@@ -12,7 +12,8 @@ def build(memory, identifier):
         wb = load_workbook(BytesIO(release.workbook(source, lang)))
         guide = wb["Start here"]
         guide["A1"] = "PERSONAL BUDGET" if lang == "en" else "PRESUPUESTO PERSONAL"
-        guide["B12"] = "For personal budgeting only. Not financial advice." if lang == "en" else "Para presupuesto personal. No es asesoramiento financiero."
+        guide["A13"] = "Disclaimer" if lang == "en" else "Aviso"
+        guide["B13"] = "For personal budgeting only. Not financial advice." if lang == "en" else "Para presupuesto personal. No es asesoramiento financiero."
         out = BytesIO()
         wb.save(out)
         data = out.getvalue()
