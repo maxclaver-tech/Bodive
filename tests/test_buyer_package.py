@@ -14,11 +14,21 @@ class BuyerPackage(unittest.TestCase):
             self.assertEqual(set(z.namelist()), {"personal-budget-en.xlsx","personal-budget-es.xlsx","README.txt"})
             for lang in ("en","es"):
                 raw = z.read(f"personal-budget-{lang}.xlsx")
-                budget_product.verify(raw)
+                if lang == "en":
+                    budget_product.verify(raw)
                 wb = load_workbook(BytesIO(raw))
-                self.assertNotIn("prototype", wb["Start here"]["A1"].value.lower())
-                self.assertNotIn("prototipo", wb["Start here"]["B13"].value.lower())
-                self.assertNotIn("prototype", wb["Start here"]["B13"].value.lower())
-                self.assertIn("Excel", wb["Start here"]["B12"].value)
-                self.assertIsNone(wb["Actual"]["B4"].value)
+                guide = wb["Inicio" if lang == "es" else "Start here"]
+                actual = wb["Registro real" if lang == "es" else "Actual"]
+                if lang == "es":
+                    self.assertEqual(wb.sheetnames, list(buyer_package.SHEET_NAMES.values()))
+                    self.assertEqual(wb["Resumen"]["B4"].value, "='Presupuesto'!B7")
+                    self.assertEqual(wb["Resumen"]["G4"].value, "='Registro real'!B20-'Presupuesto'!B20")
+                    self.assertIn("Resumen", wb["Resumen"]._charts[0].series[0].val.numRef.f)
+                    self.assertIn("Categorías", wb["Categorías"]._charts[0].series[0].val.numRef.f)
+                    self.assertIn("Sigue Inicio", z.read("README.txt").decode())
+                self.assertNotIn("prototype", guide["A1"].value.lower())
+                self.assertNotIn("prototipo", guide["B13"].value.lower())
+                self.assertNotIn("prototype", guide["B13"].value.lower())
+                self.assertIn("Excel", guide["B12"].value)
+                self.assertIsNone(actual["B4"].value)
         memory.check_running.assert_called()
