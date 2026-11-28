@@ -426,6 +426,15 @@ class Memory:
                 query("update approvals set blocked=1 where status='claimed'")
                 self.audit(query, "emergency_stop", actor=actor, reason="budget_exceeded")
 
+    def store_query_slot(self):
+        with self.transaction() as query:
+            self.require_running(query)
+            since=now().replace(hour=0,minute=0,second=0,microsecond=0).isoformat()
+            count=query("select count(*) as total from events where name='store_query_started' and created_at>=?",since).fetchone()["total"]
+            if count>=12:
+                raise Refused("Cuota Gumroad agotada (12 consultas/día UTC)")
+            self.audit(query,"store_query_started")
+
     def record_product_receipt(self, identifier, gross, deductions, reference, actor):
         if self.mode=="live" and not actor.startswith("telegram:"):
             raise Refused("Live accounting requires Telegram")
