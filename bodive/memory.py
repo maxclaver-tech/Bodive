@@ -222,6 +222,21 @@ class Memory:
                 raise Refused("Draft could not be attached to the claim")
             self.audit(query, "claude_draft_saved", id=identifier)
 
+    def record_community(self, identifier, result):
+        with self.transaction() as query:
+            self.require_running(query)
+            if query("select id from opportunities where id=?", identifier).fetchone() is None:
+                raise Refused("Unknown dossier")
+            self.audit(query, "community_snapshot", dossier_id=identifier, snapshot=result)
+
+    def latest_community(self, identifier):
+        with self.transaction() as query:
+            for row in query("select detail from events where name='community_snapshot' order by created_at desc"):
+                detail = json.loads(row["detail"])
+                if detail.get("dossier_id")==identifier:
+                    return detail["snapshot"]
+        return None
+
     def market_observation(self, identifier, kind, url, note, actor):
         from .market import observation
         if self.mode == "live" and not actor.startswith("telegram:"):

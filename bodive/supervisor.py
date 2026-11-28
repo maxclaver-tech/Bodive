@@ -90,6 +90,29 @@ def on_message(memory, telegram, message):
         memory.market_observation(*match.groups(), actor)
         telegram.send("Observación aportada por operador guardada. No equivale a verificación independiente.")
         return
+    if match := re.fullmatch(rf"/(scan|signals) ({ID})", text):
+        from .community import search
+        action, identifier = match.groups()
+        dossier = memory.load(identifier)
+        if action == "scan":
+            if memory.mode != "live":
+                raise Refused("La búsqueda externa requiere modo live")
+            memory.research_slot()
+            snapshot = search(telegram.http, dossier["evidence"]["topic"])
+            memory.record_community(identifier, snapshot)
+        else:
+            snapshot = memory.latest_community(identifier)
+        if snapshot is None:
+            telegram.send("Sin búsqueda guardada. Usa /scan DOSIER.")
+            return
+        telegram.send(f"BODIVE · {snapshot['source']}\nTema: {snapshot['query']}\n"
+                      f"Fecha UTC: {snapshot['collected_at']}\n"
+                      f"Resultados de muestra: {len(snapshot['observations'])}\n"
+                      f"{snapshot['interpretation']}\nNo encontrar resultados no demuestra ausencia de demanda.")
+        for item in snapshot["observations"]:
+            telegram.send(f"{item['title']}\n{item['url']}\n"
+                          f"Puntos: {item['points']} · Comentarios: {item['comments']}\n{item['published_at']}")
+        return
     if match := re.fullmatch(rf"/market ({ID})", text):
         from .market import assessment
         identifier = match[1]
@@ -204,7 +227,7 @@ def on_message(memory, telegram, message):
                 telegram.send(f"{identifier} · {row['kind']} · {row['status']}\n"
                               + json.dumps(data, ensure_ascii=False, indent=2))
         return
-    telegram.send("Comandos: /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
+    telegram.send("Comandos: /scan DOSIER, /signals DOSIER, /market DOSIER, /evidence DOSIER competitor|interest|purchase URL NOTA, /pending, /reconcile ID CENTIMOS RECIBO CONFIRMO, /hosting CENTIMOS RECIBO CONFIRMO, /product DOSIER, /pdf ID, /plan TEMA, /run ID, /notify ID, /chapter DOSIER 1-6, /assemble DOSIER ID1 ID2 ID3 ID4 ID5 ID6, "
                   "/dossier ID, /review ID, /approve ID DIGEST, /reject ID DIGEST, "
                   "/claim ID, /ready ID, /result ID, /budget, /stop")
 
