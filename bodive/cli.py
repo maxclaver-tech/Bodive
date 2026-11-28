@@ -45,6 +45,11 @@ def parser():
     campaign.add_argument("id")
     campaign.add_argument("language", choices=("es", "en"))
     campaign.add_argument("start")
+    commands.add_parser("performance")
+    commands.add_parser("market-preview").add_argument("file")
+    catalog = commands.add_parser("catalog-preview")
+    catalog.add_argument("product", choices=("project_tracker", "habit_tracker"))
+    catalog.add_argument("output")
     commands.add_parser("reconcile-preview").add_argument("file")
     chapter = commands.add_parser("propose-chapter")
     chapter.add_argument("id")
@@ -120,6 +125,29 @@ def execute(args, memory, http):
     if command == "campaign-preview":
         from .marketing import campaign
         return campaign(memory, args.id, args.language, args.start)
+    if command == "performance":
+        from .performance import report
+        return report(memory)
+    if command == "market-preview":
+        from datetime import date
+        from .market_evidence import review
+        memory.check_running()
+        with open(args.file, "rb") as stream:
+            raw = stream.read(1_000_001)
+        if len(raw) > 1_000_000:
+            raise Refused("Evidence file too large")
+        return review(json.loads(raw), date.today())
+    if command == "catalog-preview":
+        from .catalog import generate
+        from hashlib import sha256
+        from pathlib import Path
+        path = Path(args.output)
+        if path.suffix != ".xlsx":
+            raise Refused("Use an XLSX output path")
+        data = generate(memory, args.product)
+        with path.open("xb") as stream:
+            stream.write(data)
+        return {"sha256": sha256(data).hexdigest(), "status": "private_review", "published": False}
     if command == "reconcile-preview":
         from .reconciliation import preview
         with open(args.file, "rb") as stream:
