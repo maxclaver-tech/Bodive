@@ -92,7 +92,8 @@ class Telegram:
 
     def document(self, data, filename):
         allowed = {"bodive-review.pdf": (b"%PDF-", "application/pdf"),
-                   "bodive-budget-review.xlsx": (b"PK\x03\x04", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+                   "bodive-budget-review.xlsx": (b"PK\x03\x04", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+                   "bodive-launch-review.zip": (b"PK\x03\x04", "application/zip")}
         if filename not in allowed:
             raise Refused("Invalid document filename")
         signature, content_type = allowed[filename]
